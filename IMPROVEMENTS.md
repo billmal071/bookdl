@@ -11,11 +11,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [ ] Integration tests for the CLI commands
 - [ ] TUI component tests
 
-### 2. Search Filters
-- [ ] Language filter (`-l english`, `--language spanish`)
-- [ ] Year range filter (`--year 2020` or `--year 2020-2024`)
-- [ ] File size limit (`--max-size 50MB`)
-- [ ] Source filter (libgen, sci-hub, etc.)
+### ~~2. Search Filters~~ ✓
+- [x] Language filter (`-l english`, `--language spanish`)
+- [x] Year range filter (`--year 2020` or `--year 2020-2024`)
+- [x] File size limit (`--max-size 50MB`)
+- [ ] Source filter (libgen, sci-hub, etc.) - deferred, requires API support
 
 ### 3. Download Queue
 - [ ] Select multiple books from search results (space to toggle, enter to confirm)
@@ -108,3 +108,4 @@ To work on an improvement:
 - [x] Pagination support for search - v0.1.0
 - [x] Fix FormatSize display function - v0.1.0
 - [x] Book details view (press 'i') with open in browser (press 'o') - v0.2.0
+- [x] Search filters: language (-l), year (--year), max size (--max-size) - v0.2.0

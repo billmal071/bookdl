@@ -43,6 +43,19 @@ bookdl search "clean code"
 # Search with format filter
 bookdl search -f epub "design patterns"
 
+# Filter by language
+bookdl search -l english "machine learning"
+
+# Filter by year or year range
+bookdl search --year 2020 "python"
+bookdl search --year 2020-2024 "algorithms"
+
+# Filter by maximum file size
+bookdl search --max-size 10MB "data science"
+
+# Combine filters
+bookdl search -f pdf -l english --year 2020-2024 "deep learning"
+
 # Limit number of results
 bookdl search -n 10 "golang programming"
 
@@ -53,6 +66,8 @@ bookdl search -d "pragmatic programmer"
 In the interactive selector:
 - `↑/↓` - Navigate through results
 - `Enter` - Select a book
+- `i` - Show book details
+- `o` - Open book page in browser (when details visible)
 - `m` - Load more results
 - `q/Esc` - Cancel
 
