@@ -479,10 +479,9 @@ func (m *Manager) downloadChunk(ctx context.Context, download *db.Download, chun
 			chunk.Downloaded += int64(n)
 			bar.Add(n)
 
-			// Periodically save progress (every 1MB)
-			if chunk.Downloaded%(1024*1024) == 0 {
-				db.UpdateChunkProgress(chunk.ID, chunk.Downloaded)
-				db.UpdateProgress(download.ID, download.DownloadedSize+chunk.Downloaded)
+			// Periodically save progress (every 256KB to minimize data loss on crash)
+			if chunk.Downloaded%(256*1024) == 0 {
+				db.UpdateProgressAtomic(download.ID, chunk.ID, chunk.Downloaded, download.DownloadedSize+chunk.Downloaded)
 			}
 		}
 

@@ -286,6 +286,28 @@ func UpdateChunkProgress(chunkID int64, downloaded int64) error {
 	return err
 }
 
+// UpdateProgressAtomic updates both chunk and download progress in a single transaction
+// This ensures consistency if the operation is interrupted (e.g., by pause)
+func UpdateProgressAtomic(downloadID, chunkID, chunkDownloaded, totalDownloaded int64) error {
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`UPDATE chunks SET downloaded = ? WHERE id = ?`, chunkDownloaded, chunkID)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE downloads SET downloaded_size = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, totalDownloaded, downloadID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 // MarkChunkCompleted marks a chunk as completed
 func MarkChunkCompleted(chunkID int64) error {
 	_, err := database.Exec(`
