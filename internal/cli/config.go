@@ -131,6 +131,46 @@ Examples:
 	},
 }
 
+var configNotifyCmd = &cobra.Command{
+	Use:   "notify [on|off]",
+	Short: "Enable or disable desktop notifications",
+	Long: `Enable or disable desktop notifications for download events.
+
+Examples:
+  bookdl config notify on     Enable notifications
+  bookdl config notify off    Disable notifications
+  bookdl config notify        Show current setting`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			// Show current setting
+			enabled := config.Get().Downloads.Notifications
+			if enabled {
+				fmt.Println("Desktop notifications: enabled")
+			} else {
+				fmt.Println("Desktop notifications: disabled")
+			}
+			return nil
+		}
+
+		switch args[0] {
+		case "on", "true", "yes", "1":
+			if err := config.Set("downloads.notifications", "true"); err != nil {
+				return fmt.Errorf("failed to enable notifications: %w", err)
+			}
+			Successf("Desktop notifications enabled")
+		case "off", "false", "no", "0":
+			if err := config.Set("downloads.notifications", "false"); err != nil {
+				return fmt.Errorf("failed to disable notifications: %w", err)
+			}
+			Successf("Desktop notifications disabled")
+		default:
+			return fmt.Errorf("invalid value: use 'on' or 'off'")
+		}
+		return nil
+	},
+}
+
 func init() {
 	configOrganizeCmd.Flags().StringP("pattern", "p", "", "custom organization pattern (for custom mode)")
 	configOrganizeCmd.Flags().Bool("rename", false, "rename files based on metadata")
@@ -139,4 +179,5 @@ func init() {
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configPathCmd)
 	configCmd.AddCommand(configOrganizeCmd)
+	configCmd.AddCommand(configNotifyCmd)
 }

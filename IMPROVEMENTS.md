@@ -84,10 +84,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] Different strategies per error type (retryable, non-retryable, rate-limited)
 - [x] Jitter to prevent thundering herd
 
-### 14. Notifications
-- [ ] Desktop notifications on download complete (optional)
-- [ ] Sound notification option
-- [ ] macOS/Linux/Windows support
+### ~~14. Notifications~~ ✓
+- [x] Desktop notifications on download complete (optional)
+- [ ] Sound notification option (deferred)
+- [x] macOS/Linux/Windows support
+- [x] Enable/disable via: `bookdl config notify on/off`
 
 ### 15. Cache Search Results
 - [ ] Cache recent search results locally
@@ -119,3 +120,4 @@ To work on an improvement:
 - [x] File organization by author/format/year/custom pattern - v0.2.0
 - [x] Search history with filters and clear command - v0.2.0
 - [x] Exponential backoff retry with error categorization - v0.2.0
+- [x] Desktop notifications (Linux/macOS/Windows) - v0.2.0

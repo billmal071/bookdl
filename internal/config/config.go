@@ -29,6 +29,7 @@ type DownloadConfig struct {
 	ChunkSize     int64  `mapstructure:"chunk_size"`
 	MaxConcurrent int    `mapstructure:"max_concurrent"`
 	AutoResume    bool   `mapstructure:"auto_resume"`
+	Notifications bool   `mapstructure:"notifications"`
 }
 
 // FileConfig holds file preferences
@@ -75,6 +76,7 @@ func Init(cfgFile string) error {
 	viper.SetDefault("downloads.chunk_size", 5*1024*1024) // 5MB
 	viper.SetDefault("downloads.max_concurrent", 2)
 	viper.SetDefault("downloads.auto_resume", true)
+	viper.SetDefault("downloads.notifications", false)
 	viper.SetDefault("files.preferred_formats", []string{"epub", "pdf"})
 	viper.SetDefault("files.organize_mode", "flat")
 	viper.SetDefault("files.organize_pattern", "{author}/{title}")

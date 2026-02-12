@@ -13,6 +13,7 @@ import (
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
+	"github.com/billmal071/bookdl/internal/notify"
 )
 
 var downloadCmd = &cobra.Command{
@@ -196,6 +197,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 				return fmt.Errorf("failed to mark download complete: %w", err)
 			}
 			Successf("Downloaded: %s", download.FilePath)
+			notify.DownloadComplete(download.Title)
 			return nil
 		}
 
@@ -214,6 +216,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	}
 
 	db.UpdateStatus(download.ID, db.StatusFailed, lastErr.Error())
+	notify.DownloadFailed(download.Title, lastErr.Error())
 	return fmt.Errorf("download failed after trying all mirrors: %w", lastErr)
 }
 
