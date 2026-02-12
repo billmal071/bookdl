@@ -71,6 +71,34 @@ In the interactive selector:
 - `m` - Load more results
 - `q/Esc` - Cancel
 
+### Queue Multiple Books
+
+Use `-q` flag for multi-select mode to queue multiple books:
+
+```bash
+# Search and select multiple books to queue
+bookdl search -q "programming"
+```
+
+In multi-select mode:
+- `Space` - Toggle selection
+- `a` - Select all
+- `n` - Deselect all
+- `Enter` - Confirm and add to queue
+
+### Manage Queue
+
+```bash
+# View download queue
+bookdl queue
+
+# Clear all pending downloads
+bookdl queue clear
+
+# Remove specific items from queue
+bookdl queue remove 1 2 3
+```
+
 ### Download a Book
 
 ```bash

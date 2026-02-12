@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/anna"
+	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/tui"
 )
 
@@ -20,6 +21,7 @@ var searchCmd = &cobra.Command{
 
 By default, shows an interactive selector to choose from the results.
 Use -d/--download to immediately start downloading the selected book.
+Use -q/--queue for multi-select mode to add multiple books to the download queue.
 
 Examples:
   bookdl search "clean code"
@@ -28,7 +30,8 @@ Examples:
   bookdl search -l english "machine learning"
   bookdl search --year 2020-2024 "python"
   bookdl search --max-size 10MB "algorithms"
-  bookdl search -d "pragmatic programmer"`,
+  bookdl search -d "pragmatic programmer"
+  bookdl search -q "programming books"     # Multi-select to queue`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runSearch,
 }
@@ -48,6 +51,7 @@ func init() {
 	searchCmd.Flags().String("year", "", "filter by year (2020) or year range (2020-2024)")
 	searchCmd.Flags().String("max-size", "", "filter by maximum file size (e.g., 10MB, 1GB)")
 	searchCmd.Flags().BoolP("download", "d", false, "immediately download selected book")
+	searchCmd.Flags().BoolP("queue", "q", false, "multi-select mode: add multiple books to download queue")
 	searchCmd.Flags().Bool("no-interactive", false, "disable interactive mode, just print results")
 }
 
@@ -55,6 +59,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	query := strings.Join(args, " ")
 	limit, _ := cmd.Flags().GetInt("limit")
 	autoDownload, _ := cmd.Flags().GetBool("download")
+	queueMode, _ := cmd.Flags().GetBool("queue")
 	noInteractive, _ := cmd.Flags().GetBool("no-interactive")
 
 	// Collect filter options
@@ -135,7 +140,38 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return moreBooks, nil
 	}
 
-	// Interactive selection with load more support
+	// Queue mode: multi-select
+	if queueMode {
+		selectedBooks, err := tui.RunMultiSelector(books, loadMore)
+		if err != nil {
+			return fmt.Errorf("selection failed: %w", err)
+		}
+
+		if len(selectedBooks) == 0 {
+			return nil // User cancelled
+		}
+
+		fmt.Println()
+
+		// Add selected books to queue
+		added := 0
+		for _, book := range selectedBooks {
+			if err := addToQueue(book); err != nil {
+				Errorf("failed to queue %s: %v", book.Title, err)
+			} else {
+				added++
+				fmt.Printf("Queued: %s\n", book.Title)
+			}
+		}
+
+		if added > 0 {
+			Successf("Added %d book(s) to the download queue.", added)
+			fmt.Println("Run 'bookdl queue' to view the queue or 'bookdl resume all' to start downloading.")
+		}
+		return nil
+	}
+
+	// Interactive selection with load more support (single select)
 	selected, err := tui.RunSelectorWithLoadMore(books, loadMore)
 	if err != nil {
 		return fmt.Errorf("selection failed: %w", err)
@@ -158,6 +194,35 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  bookdl download %s\n", selected.MD5Hash)
 
 	return nil
+}
+
+// addToQueue adds a book to the download queue as a pending download
+func addToQueue(book *anna.Book) error {
+	// Check if already in queue
+	existing, err := db.GetDownloadByHash(book.MD5Hash)
+	if err == nil && existing != nil {
+		if existing.Status == db.StatusPending {
+			return fmt.Errorf("already in queue")
+		}
+		if existing.Status == db.StatusCompleted {
+			return fmt.Errorf("already downloaded")
+		}
+	}
+
+	// Create a pending download
+	download := &db.Download{
+		MD5Hash:   book.MD5Hash,
+		Title:     book.Title,
+		Authors:   book.Authors,
+		Publisher: book.Publisher,
+		Language:  book.Language,
+		Format:    book.Format,
+		FileSize:  book.SizeBytes,
+		SourceURL: book.PageURL,
+		Status:    db.StatusPending,
+	}
+
+	return db.CreateDownload(download)
 }
 
 // getString safely gets a string flag value

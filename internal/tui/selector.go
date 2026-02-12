@@ -56,7 +56,9 @@ func (b BookItem) Description() string {
 func (b BookItem) FilterValue() string { return b.Book.Title }
 
 // BookDelegate handles rendering of book items
-type BookDelegate struct{}
+type BookDelegate struct {
+	selectedMD5s map[string]bool // For multi-select mode
+}
 
 func (d BookDelegate) Height() int                             { return 3 }
 func (d BookDelegate) Spacing() int                            { return 0 }
@@ -74,13 +76,38 @@ func (d BookDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		title = title[:57] + "..."
 	}
 
+	// Check if this item is selected (multi-select mode)
+	isChecked := d.selectedMD5s != nil && d.selectedMD5s[book.Book.MD5Hash]
+	checkbox := "[ ]"
+	if isChecked {
+		checkbox = "[✓]"
+	}
+
 	var str string
 	if index == m.Index() {
-		str = SelectedStyle.Render(fmt.Sprintf("  ➤ %d. %s", index+1, title))
+		if d.selectedMD5s != nil {
+			// Multi-select mode
+			if isChecked {
+				str = SuccessStyle.Render(fmt.Sprintf("➤ %s %d. %s", checkbox, index+1, title))
+			} else {
+				str = SelectedStyle.Render(fmt.Sprintf("➤ %s %d. %s", checkbox, index+1, title))
+			}
+		} else {
+			str = SelectedStyle.Render(fmt.Sprintf("  ➤ %d. %s", index+1, title))
+		}
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      %s", book.Description()))
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", book.Book.MD5Hash[:16]+"..."))
 	} else {
-		str = NormalStyle.Render(fmt.Sprintf("    %d. %s", index+1, title))
+		if d.selectedMD5s != nil {
+			// Multi-select mode
+			if isChecked {
+				str = SuccessStyle.Render(fmt.Sprintf("  %s %d. %s", checkbox, index+1, title))
+			} else {
+				str = NormalStyle.Render(fmt.Sprintf("  %s %d. %s", checkbox, index+1, title))
+			}
+		} else {
+			str = NormalStyle.Render(fmt.Sprintf("    %d. %s", index+1, title))
+		}
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      %s", book.Description()))
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", book.Book.MD5Hash[:16]+"..."))
 	}
@@ -92,6 +119,7 @@ func (d BookDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 type SelectorModel struct {
 	list          list.Model
 	selected      *anna.Book
+	multiSelected []*anna.Book
 	quitting      bool
 	err           error
 	loadMore      LoadMoreFunc
@@ -100,6 +128,8 @@ type SelectorModel struct {
 	noMoreResults bool
 	showDetails   bool
 	browserMsg    string
+	multiSelect   bool
+	checkedMD5s   map[string]bool
 }
 
 // NewSelector creates a new book selector TUI
@@ -109,6 +139,16 @@ func NewSelector(books []*anna.Book, title string) SelectorModel {
 
 // NewSelectorWithLoadMore creates a new book selector TUI with load more support
 func NewSelectorWithLoadMore(books []*anna.Book, title string, loadMore LoadMoreFunc) SelectorModel {
+	return newSelector(books, title, loadMore, false)
+}
+
+// NewMultiSelector creates a new book selector TUI with multi-select support
+func NewMultiSelector(books []*anna.Book, title string, loadMore LoadMoreFunc) SelectorModel {
+	return newSelector(books, title, loadMore, true)
+}
+
+// newSelector is the internal constructor for both single and multi-select modes
+func newSelector(books []*anna.Book, title string, loadMore LoadMoreFunc, multiSelect bool) SelectorModel {
 	items := make([]list.Item, len(books))
 	seenMD5s := make(map[string]bool)
 	for i, book := range books {
@@ -116,7 +156,13 @@ func NewSelectorWithLoadMore(books []*anna.Book, title string, loadMore LoadMore
 		seenMD5s[book.MD5Hash] = true
 	}
 
+	var checkedMD5s map[string]bool
 	delegate := BookDelegate{}
+	if multiSelect {
+		checkedMD5s = make(map[string]bool)
+		delegate.selectedMD5s = checkedMD5s
+	}
+
 	// Use a fixed reasonable height that allows scrolling
 	// The list component handles scrolling internally
 	l := list.New(items, delegate, 80, 20)
@@ -127,9 +173,11 @@ func NewSelectorWithLoadMore(books []*anna.Book, title string, loadMore LoadMore
 	l.Styles.Title = TitleStyle
 
 	return SelectorModel{
-		list:     l,
-		loadMore: loadMore,
-		seenMD5s: seenMD5s,
+		list:        l,
+		loadMore:    loadMore,
+		seenMD5s:    seenMD5s,
+		multiSelect: multiSelect,
+		checkedMD5s: checkedMD5s,
 	}
 }
 
@@ -149,10 +197,55 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "enter":
-			if item, ok := m.list.SelectedItem().(BookItem); ok {
-				m.selected = item.Book
+			if m.multiSelect {
+				// In multi-select mode, confirm selection
+				m.multiSelected = m.getCheckedBooks()
+				if len(m.multiSelected) == 0 {
+					// If nothing checked, select current item
+					if item, ok := m.list.SelectedItem().(BookItem); ok {
+						m.multiSelected = []*anna.Book{item.Book}
+					}
+				}
+			} else {
+				// Single select mode
+				if item, ok := m.list.SelectedItem().(BookItem); ok {
+					m.selected = item.Book
+				}
 			}
 			return m, tea.Quit
+		case " ":
+			// Toggle selection in multi-select mode
+			if m.multiSelect {
+				if item, ok := m.list.SelectedItem().(BookItem); ok {
+					md5 := item.Book.MD5Hash
+					if m.checkedMD5s[md5] {
+						delete(m.checkedMD5s, md5)
+					} else {
+						m.checkedMD5s[md5] = true
+					}
+					// Update delegate's reference
+					m.updateDelegate()
+				}
+				return m, nil
+			}
+		case "a", "A":
+			// Select all in multi-select mode
+			if m.multiSelect {
+				for _, item := range m.list.Items() {
+					if book, ok := item.(BookItem); ok {
+						m.checkedMD5s[book.Book.MD5Hash] = true
+					}
+				}
+				m.updateDelegate()
+				return m, nil
+			}
+		case "n", "N":
+			// Deselect all in multi-select mode
+			if m.multiSelect {
+				m.checkedMD5s = make(map[string]bool)
+				m.updateDelegate()
+				return m, nil
+			}
 		case "m", "M":
 			// Load more results
 			if m.loadMore != nil && !m.noMoreResults {
@@ -223,6 +316,25 @@ func (m SelectorModel) doLoadMore() tea.Cmd {
 		books, err := m.loadMore()
 		return loadMoreMsg{books: books, err: err}
 	}
+}
+
+// getCheckedBooks returns the list of checked books in multi-select mode
+func (m SelectorModel) getCheckedBooks() []*anna.Book {
+	var books []*anna.Book
+	for _, item := range m.list.Items() {
+		if book, ok := item.(BookItem); ok {
+			if m.checkedMD5s[book.Book.MD5Hash] {
+				books = append(books, book.Book)
+			}
+		}
+	}
+	return books
+}
+
+// updateDelegate updates the list delegate with current selection state
+func (m *SelectorModel) updateDelegate() {
+	delegate := BookDelegate{selectedMD5s: m.checkedMD5s}
+	m.list.SetDelegate(delegate)
 }
 
 // openBrowser opens a URL in the default browser
@@ -315,6 +427,16 @@ func (m SelectorModel) View() string {
 		return ErrorStyle.Render(fmt.Sprintf("\n  Error: %s\n", m.err.Error()))
 	}
 
+	// Show completion messages
+	if m.multiSelect && len(m.multiSelected) > 0 {
+		var titles []string
+		for _, book := range m.multiSelected {
+			titles = append(titles, book.Title)
+		}
+		return SuccessStyle.Render(fmt.Sprintf("\n  ✓ Selected %d book(s):\n    - %s\n",
+			len(m.multiSelected), strings.Join(titles, "\n    - ")))
+	}
+
 	if m.selected != nil {
 		return SuccessStyle.Render(fmt.Sprintf("\n  ✓ Selected: %s\n", m.selected.Title))
 	}
@@ -328,8 +450,13 @@ func (m SelectorModel) View() string {
 		return "\n" + m.list.View() + "\n" + WarningStyle.Render("  Loading more results...")
 	}
 
-	// Build help text
-	helpParts := []string{"↑/↓: navigate", "enter: select", "i: details"}
+	// Build help text based on mode
+	var helpParts []string
+	if m.multiSelect {
+		helpParts = []string{"↑/↓: navigate", "space: toggle", "a: all", "n: none", "enter: confirm", "i: details"}
+	} else {
+		helpParts = []string{"↑/↓: navigate", "enter: select", "i: details"}
+	}
 	if m.showDetails {
 		helpParts = append(helpParts, "o: open in browser")
 	}
@@ -343,6 +470,12 @@ func (m SelectorModel) View() string {
 	var view strings.Builder
 	view.WriteString("\n")
 	view.WriteString(m.list.View())
+
+	// Show selection count in multi-select mode
+	if m.multiSelect && len(m.checkedMD5s) > 0 {
+		view.WriteString("\n")
+		view.WriteString(SuccessStyle.Render(fmt.Sprintf("  %d book(s) selected", len(m.checkedMD5s))))
+	}
 
 	// Show details panel if enabled
 	if m.showDetails {
@@ -364,6 +497,11 @@ func (m SelectorModel) View() string {
 // Selected returns the selected book
 func (m SelectorModel) Selected() *anna.Book {
 	return m.selected
+}
+
+// MultiSelected returns the multi-selected books
+func (m SelectorModel) MultiSelected() []*anna.Book {
+	return m.multiSelected
 }
 
 // RunSelector displays the TUI and returns the selected book
@@ -391,4 +529,26 @@ func RunSelectorWithLoadMore(books []*anna.Book, loadMore LoadMoreFunc) (*anna.B
 	}
 
 	return selector.Selected(), nil
+}
+
+// RunMultiSelector displays the TUI with multi-select support and returns selected books
+func RunMultiSelector(books []*anna.Book, loadMore LoadMoreFunc) ([]*anna.Book, error) {
+	if len(books) == 0 {
+		return nil, fmt.Errorf("no books to select from")
+	}
+
+	model := NewMultiSelector(books, "Select books to queue (space to toggle)", loadMore)
+	p := tea.NewProgram(model)
+
+	finalModel, err := p.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	selector := finalModel.(SelectorModel)
+	if selector.err != nil {
+		return nil, selector.err
+	}
+
+	return selector.MultiSelected(), nil
 }

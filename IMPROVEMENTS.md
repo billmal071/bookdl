@@ -17,10 +17,10 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] File size limit (`--max-size 50MB`)
 - [ ] Source filter (libgen, sci-hub, etc.) - deferred, requires API support
 
-### 3. Download Queue
-- [ ] Select multiple books from search results (space to toggle, enter to confirm)
-- [ ] Queue management commands (`bookdl queue list`, `bookdl queue clear`)
-- [ ] Priority ordering in queue
+### ~~3. Download Queue~~ ✓
+- [x] Select multiple books from search results (space to toggle, enter to confirm)
+- [x] Queue management commands (`bookdl queue`, `bookdl queue clear`, `bookdl queue remove`)
+- [ ] Priority ordering in queue - deferred
 
 ### 4. Concurrent Downloads
 - [ ] Download multiple books simultaneously
@@ -109,3 +109,4 @@ To work on an improvement:
 - [x] Fix FormatSize display function - v0.1.0
 - [x] Book details view (press 'i') with open in browser (press 'o') - v0.2.0
 - [x] Search filters: language (-l), year (--year), max size (--max-size) - v0.2.0
+- [x] Download queue with multi-select (search -q) and queue management - v0.2.0

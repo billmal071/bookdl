@@ -59,6 +59,7 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(queueCmd)
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(pauseCmd)
 	rootCmd.AddCommand(restartCmd)
