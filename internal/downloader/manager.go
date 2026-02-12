@@ -22,6 +22,53 @@ const (
 	MaxRetries = 3
 )
 
+// createProgressBar creates a styled progress bar with speed, ETA, and colors
+func createProgressBar(total int64, description string) *progressbar.ProgressBar {
+	return progressbar.NewOptions64(
+		total,
+		progressbar.OptionSetDescription(description),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(30),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]█[reset]",
+			SaucerHead:    "[green]▓[reset]",
+			SaucerPadding: "[dark_gray]░[reset]",
+			BarStart:      "[dark_gray]│[reset]",
+			BarEnd:        "[dark_gray]│[reset]",
+		}),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Println()
+		}),
+	)
+}
+
+// createChunkProgressBar creates a progress bar for chunked downloads showing chunk info
+func createChunkProgressBar(total int64, description string, currentChunk, totalChunks int) *progressbar.ProgressBar {
+	desc := fmt.Sprintf("%s [chunk %d/%d]", description, currentChunk, totalChunks)
+	return progressbar.NewOptions64(
+		total,
+		progressbar.OptionSetDescription(desc),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(25),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[cyan]█[reset]",
+			SaucerHead:    "[cyan]▓[reset]",
+			SaucerPadding: "[dark_gray]░[reset]",
+			BarStart:      "[dark_gray]│[reset]",
+			BarEnd:        "[dark_gray]│[reset]",
+		}),
+	)
+}
+
 // DownloadResult contains the result of a download operation
 type DownloadResult struct {
 	Download *db.Download
@@ -247,21 +294,8 @@ func (m *Manager) downloadSimple(ctx context.Context, download *db.Download) err
 	}
 	defer file.Close()
 
-	// Create progress bar
-	bar := progressbar.NewOptions64(
-		resp.ContentLength,
-		progressbar.OptionSetDescription("Downloading"),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWidth(40),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "=",
-			SaucerHead:    ">",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-	)
+	// Create styled progress bar with speed and ETA
+	bar := createProgressBar(resp.ContentLength, "Downloading")
 
 	// Read the first few bytes to validate content
 	header := make([]byte, 512)
@@ -288,8 +322,6 @@ func (m *Manager) downloadSimple(ctx context.Context, download *db.Download) err
 	if err != nil {
 		return err
 	}
-
-	fmt.Println() // New line after progress bar
 
 	// Move temp file to final location
 	file.Close()
@@ -319,40 +351,31 @@ func (m *Manager) downloadChunked(ctx context.Context, download *db.Download) er
 		return err
 	}
 
-	// Calculate already downloaded
+	// Calculate already downloaded and count incomplete chunks
 	var downloaded int64
+	var incompleteChunks int
 	for _, chunk := range chunks {
 		if chunk.Status == "completed" {
 			downloaded += (chunk.EndByte - chunk.StartByte + 1)
 		} else {
 			downloaded += chunk.Downloaded
+			incompleteChunks++
 		}
 	}
 
-	// Create progress bar
-	bar := progressbar.NewOptions64(
-		download.FileSize,
-		progressbar.OptionSetDescription("Downloading"),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWidth(40),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "=",
-			SaucerHead:    ">",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-	)
+	// Create styled progress bar with speed and ETA
+	bar := createProgressBar(download.FileSize, fmt.Sprintf("Downloading (%d chunks)", len(chunks)))
 
 	// Set initial progress
 	bar.Set64(downloaded)
 
 	// Download each incomplete chunk
+	chunkNum := 0
 	for _, chunk := range chunks {
 		if chunk.Status == "completed" {
 			continue
 		}
+		chunkNum++
 
 		select {
 		case <-ctx.Done():
@@ -360,12 +383,13 @@ func (m *Manager) downloadChunked(ctx context.Context, download *db.Download) er
 		default:
 		}
 
+		// Update description to show current chunk
+		bar.Describe(fmt.Sprintf("Chunk %d/%d", len(chunks)-incompleteChunks+chunkNum, len(chunks)))
+
 		if err := m.downloadChunk(ctx, download, chunk, file, bar); err != nil {
 			return err
 		}
 	}
-
-	fmt.Println() // New line after progress bar
 
 	// Move temp file to final location
 	file.Close()

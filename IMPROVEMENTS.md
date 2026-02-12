@@ -41,11 +41,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [ ] Arrow up/down in search to cycle through history
 - [ ] Clear history command
 
-### 7. Better Progress Display
-- [ ] Show download speed (MB/s)
-- [ ] Show ETA (estimated time remaining)
-- [ ] Cleaner progress bar with colors
-- [ ] Show chunk progress for resumable downloads
+### ~~7. Better Progress Display~~ ✓
+- [x] Show download speed (MB/s)
+- [x] Show ETA (estimated time remaining)
+- [x] Cleaner progress bar with colors (green/cyan themes)
+- [x] Show chunk progress for resumable downloads
 
 ### 8. Favorites/Bookmarks
 - [ ] Save books for later: `bookdl bookmark <md5>`
@@ -111,3 +111,4 @@ To work on an improvement:
 - [x] Search filters: language (-l), year (--year), max size (--max-size) - v0.2.0
 - [x] Download queue with multi-select (search -q) and queue management - v0.2.0
 - [x] Concurrent downloads with configurable limit (max_concurrent) - v0.2.0
+- [x] Better progress display with speed, ETA, colors, chunk info - v0.2.0
