@@ -31,8 +31,9 @@ Examples:
   bookdl search --year 2020-2024 "python"
   bookdl search --max-size 10MB "algorithms"
   bookdl search -d "pragmatic programmer"
-  bookdl search -q "programming books"     # Multi-select to queue`,
-	Args: cobra.MinimumNArgs(1),
+  bookdl search -q "programming books"     # Multi-select to queue
+  bookdl search --history                  # Show search history`,
+	Args: cobra.ArbitraryArgs,
 	RunE: runSearch,
 }
 
@@ -53,9 +54,22 @@ func init() {
 	searchCmd.Flags().BoolP("download", "d", false, "immediately download selected book")
 	searchCmd.Flags().BoolP("queue", "q", false, "multi-select mode: add multiple books to download queue")
 	searchCmd.Flags().Bool("no-interactive", false, "disable interactive mode, just print results")
+	searchCmd.Flags().Bool("history", false, "show search history")
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
+	showHistory, _ := cmd.Flags().GetBool("history")
+
+	// Show search history if requested
+	if showHistory {
+		return showSearchHistory()
+	}
+
+	// Require query if not showing history
+	if len(args) == 0 {
+		return fmt.Errorf("search query required")
+	}
+
 	query := strings.Join(args, " ")
 	limit, _ := cmd.Flags().GetInt("limit")
 	autoDownload, _ := cmd.Flags().GetBool("download")
@@ -110,6 +124,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	Printf("Found %d result(s)\n\n", len(books))
+
+	// Save search to history
+	saveSearchHistory(query, len(books), filters)
 
 	// Non-interactive mode: just print results
 	if noInteractive {
@@ -421,4 +438,63 @@ func startBookDownload(ctx context.Context, book *anna.Book) error {
 	// For now, just print the command to run
 	fmt.Printf("Starting download: %s\n", book.Title)
 	return runDownloadByHash(ctx, book.MD5Hash, "", book)
+}
+
+// saveSearchHistory saves a search to the history database
+func saveSearchHistory(query string, resultCount int, filters filterOptions) {
+	dbFilters := db.SearchFilters{
+		Format:   filters.format,
+		Language: filters.language,
+		Year:     filters.year,
+		MaxSize:  filters.maxSize,
+	}
+	// Ignore errors - history is not critical
+	db.AddSearchHistory(query, resultCount, dbFilters)
+}
+
+// showSearchHistory displays recent search history
+func showSearchHistory() error {
+	history, err := db.GetUniqueSearchHistory(20)
+	if err != nil {
+		return fmt.Errorf("failed to get search history: %w", err)
+	}
+
+	if len(history) == 0 {
+		fmt.Println("No search history.")
+		fmt.Println("\nSearches are saved automatically when you search for books.")
+		return nil
+	}
+
+	fmt.Printf("Recent Searches (%d):\n\n", len(history))
+
+	for i, h := range history {
+		// Query and result count
+		fmt.Printf("  %d. \"%s\" (%d results)\n", i+1, h.Query, h.ResultCount)
+
+		// Show filters if any were used
+		var filterParts []string
+		if h.Filters.Format != "" {
+			filterParts = append(filterParts, "format="+h.Filters.Format)
+		}
+		if h.Filters.Language != "" {
+			filterParts = append(filterParts, "language="+h.Filters.Language)
+		}
+		if h.Filters.Year != "" {
+			filterParts = append(filterParts, "year="+h.Filters.Year)
+		}
+		if h.Filters.MaxSize != "" {
+			filterParts = append(filterParts, "max-size="+h.Filters.MaxSize)
+		}
+		if len(filterParts) > 0 {
+			fmt.Printf("     Filters: %s\n", strings.Join(filterParts, ", "))
+		}
+
+		// Date
+		fmt.Printf("     %s\n", h.CreatedAt.Format("2006-01-02 15:04"))
+		fmt.Println()
+	}
+
+	fmt.Println("To repeat a search, copy the query above.")
+	fmt.Println("To clear history: bookdl history clear")
+	return nil
 }

@@ -67,6 +67,17 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_hash ON bookmarks(md5_hash);
+
+CREATE TABLE IF NOT EXISTS search_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    query           TEXT NOT NULL,
+    result_count    INTEGER DEFAULT 0,
+    filters         TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_history_query ON search_history(query);
+CREATE INDEX IF NOT EXISTS idx_search_history_created ON search_history(created_at DESC);
 `
 
 // Init initializes the database connection and schema

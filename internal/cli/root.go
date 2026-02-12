@@ -65,6 +65,7 @@ func init() {
 	rootCmd.AddCommand(restartCmd)
 	rootCmd.AddCommand(bookmarkCmd)
 	rootCmd.AddCommand(bookmarksCmd)
+	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 }

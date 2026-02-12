@@ -35,11 +35,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] Show publisher, year, language, format, size, MD5, URL
 - [x] Option to open book page in browser (press 'o')
 
-### 6. Search History
-- [ ] Store recent searches in database
-- [ ] Access with `bookdl search --history` or `bookdl history`
-- [ ] Arrow up/down in search to cycle through history
-- [ ] Clear history command
+### ~~6. Search History~~ ✓
+- [x] Store recent searches in database
+- [x] Access with `bookdl search --history` or `bookdl history`
+- [ ] Arrow up/down in search to cycle through history (deferred - requires TUI changes)
+- [x] Clear history command: `bookdl history clear`
 
 ### ~~7. Better Progress Display~~ ✓
 - [x] Show download speed (MB/s)
@@ -116,3 +116,4 @@ To work on an improvement:
 - [x] Better progress display with speed, ETA, colors, chunk info - v0.2.0
 - [x] Favorites/Bookmarks with notes and batch download - v0.2.0
 - [x] File organization by author/format/year/custom pattern - v0.2.0
+- [x] Search history with filters and clear command - v0.2.0
