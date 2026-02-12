@@ -89,22 +89,65 @@ func resumeAll(ctx context.Context) error {
 		downloads = append(downloads, failed...)
 	}
 
+	// Also get pending downloads (from queue)
+	pending, err := db.ListDownloads(db.StatusPending, false)
+	if err == nil {
+		downloads = append(downloads, pending...)
+	}
+
 	if len(downloads) == 0 {
-		fmt.Println("No paused or failed downloads to resume.")
+		fmt.Println("No downloads to resume.")
 		return nil
 	}
 
-	fmt.Printf("Resuming %d download(s)...\n\n", len(downloads))
+	mgr := downloader.NewManager()
+	maxConcurrent := mgr.GetMaxConcurrent()
 
+	fmt.Printf("Resuming %d download(s) (max %d concurrent)...\n\n", len(downloads), maxConcurrent)
+
+	// Track completed and failed
+	completed := 0
 	var errors []error
-	for _, d := range downloads {
-		if err := resumeOne(ctx, d.ID); err != nil {
-			errors = append(errors, fmt.Errorf("download #%d: %w", d.ID, err))
+
+	// Use concurrent downloads
+	results := mgr.StartConcurrent(ctx, downloads, func(id int64, status string, progress float64) {
+		// Progress callback - could be used for TUI in future
+		switch status {
+		case "starting":
+			// Find download title
+			for _, d := range downloads {
+				if d.ID == id {
+					fmt.Printf("⬇️  Starting: %s\n", d.Title)
+					break
+				}
+			}
+		case "completed":
+			fmt.Printf("✅ Completed: download #%d\n", id)
+		case "failed":
+			fmt.Printf("❌ Failed: download #%d\n", id)
+		}
+	})
+
+	// Process results
+	for _, result := range results {
+		if result.Error != nil {
+			db.UpdateStatus(result.Download.ID, db.StatusFailed, result.Error.Error())
+			errors = append(errors, fmt.Errorf("download #%d (%s): %w",
+				result.Download.ID, result.Download.Title, result.Error))
+		} else {
+			if err := db.MarkCompleted(result.Download.ID, result.Download.FilePath); err != nil {
+				errors = append(errors, fmt.Errorf("failed to mark #%d complete: %w", result.Download.ID, err))
+			} else {
+				completed++
+			}
 		}
 	}
 
+	fmt.Println()
+	fmt.Printf("Summary: %d completed, %d failed\n", completed, len(errors))
+
 	if len(errors) > 0 {
-		fmt.Printf("\n%d download(s) failed:\n", len(errors))
+		fmt.Printf("\nFailed downloads:\n")
 		for _, err := range errors {
 			fmt.Printf("  - %s\n", err)
 		}

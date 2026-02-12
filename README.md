@@ -156,8 +156,9 @@ anna:
 
 downloads:
   path: "~/Downloads/books"
-  concurrent: 1
+  max_concurrent: 2  # Number of simultaneous downloads
   chunk_size: 5242880  # 5MB chunks
+  auto_resume: true
 ```
 
 Environment variables can override config values with the `BOOKDL_` prefix:

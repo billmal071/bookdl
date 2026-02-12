@@ -22,12 +22,19 @@ const (
 	MaxRetries = 3
 )
 
+// DownloadResult contains the result of a download operation
+type DownloadResult struct {
+	Download *db.Download
+	Error    error
+}
+
 // Manager handles download operations
 type Manager struct {
-	httpClient *http.Client
-	chunkSize  int64
-	mu         sync.RWMutex
-	active     map[int64]context.CancelFunc
+	httpClient    *http.Client
+	chunkSize     int64
+	maxConcurrent int
+	mu            sync.RWMutex
+	active        map[int64]context.CancelFunc
 }
 
 // NewManager creates a new download manager
@@ -36,6 +43,11 @@ func NewManager() *Manager {
 	chunkSize := cfg.Downloads.ChunkSize
 	if chunkSize == 0 {
 		chunkSize = DefaultChunkSize
+	}
+
+	maxConcurrent := cfg.Downloads.MaxConcurrent
+	if maxConcurrent <= 0 {
+		maxConcurrent = 2
 	}
 
 	return &Manager{
@@ -48,9 +60,61 @@ func NewManager() *Manager {
 				MaxIdleConnsPerHost: 5,
 			},
 		},
-		chunkSize: chunkSize,
-		active:    make(map[int64]context.CancelFunc),
+		chunkSize:     chunkSize,
+		maxConcurrent: maxConcurrent,
+		active:        make(map[int64]context.CancelFunc),
 	}
+}
+
+// GetMaxConcurrent returns the maximum concurrent downloads setting
+func (m *Manager) GetMaxConcurrent() int {
+	return m.maxConcurrent
+}
+
+// StartConcurrent starts multiple downloads concurrently with progress tracking
+func (m *Manager) StartConcurrent(ctx context.Context, downloads []*db.Download, progressFn func(id int64, status string, progress float64)) []DownloadResult {
+	results := make([]DownloadResult, len(downloads))
+
+	// Semaphore for limiting concurrency
+	sem := make(chan struct{}, m.maxConcurrent)
+	var wg sync.WaitGroup
+	var resultMu sync.Mutex
+
+	for i, download := range downloads {
+		wg.Add(1)
+		go func(idx int, dl *db.Download) {
+			defer wg.Done()
+
+			// Acquire semaphore
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			// Notify start
+			if progressFn != nil {
+				progressFn(dl.ID, "starting", 0)
+			}
+
+			// Perform download
+			err := m.StartDownload(ctx, dl)
+
+			// Store result
+			resultMu.Lock()
+			results[idx] = DownloadResult{Download: dl, Error: err}
+			resultMu.Unlock()
+
+			// Notify completion
+			if progressFn != nil {
+				if err != nil {
+					progressFn(dl.ID, "failed", 0)
+				} else {
+					progressFn(dl.ID, "completed", 100)
+				}
+			}
+		}(i, download)
+	}
+
+	wg.Wait()
+	return results
 }
 
 // StartDownload starts or resumes a download

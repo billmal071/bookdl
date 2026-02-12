@@ -22,11 +22,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] Queue management commands (`bookdl queue`, `bookdl queue clear`, `bookdl queue remove`)
 - [ ] Priority ordering in queue - deferred
 
-### 4. Concurrent Downloads
-- [ ] Download multiple books simultaneously
-- [ ] Configurable concurrency limit (`downloads.concurrent` in config)
-- [ ] Per-download progress tracking
-- [ ] Overall progress summary
+### ~~4. Concurrent Downloads~~ ✓
+- [x] Download multiple books simultaneously
+- [x] Configurable concurrency limit (`downloads.max_concurrent` in config, default 2)
+- [x] Per-download status callbacks
+- [x] Overall progress summary with completed/failed counts
 
 ## Medium Priority
 
@@ -110,3 +110,4 @@ To work on an improvement:
 - [x] Book details view (press 'i') with open in browser (press 'o') - v0.2.0
 - [x] Search filters: language (-l), year (--year), max size (--max-size) - v0.2.0
 - [x] Download queue with multi-select (search -q) and queue management - v0.2.0
+- [x] Concurrent downloads with configurable limit (max_concurrent) - v0.2.0
