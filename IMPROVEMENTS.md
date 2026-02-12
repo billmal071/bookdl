@@ -47,11 +47,12 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] Cleaner progress bar with colors (green/cyan themes)
 - [x] Show chunk progress for resumable downloads
 
-### 8. Favorites/Bookmarks
-- [ ] Save books for later: `bookdl bookmark <md5>`
-- [ ] List bookmarks: `bookdl bookmarks`
-- [ ] Remove bookmark: `bookdl bookmark -d <md5>`
-- [ ] Download all bookmarks: `bookdl bookmarks --download`
+### ~~8. Favorites/Bookmarks~~ ✓
+- [x] Save books for later: `bookdl bookmark <md5>`
+- [x] List bookmarks: `bookdl bookmarks`
+- [x] Remove bookmark: `bookdl bookmark -d <md5>`
+- [x] Download all bookmarks: `bookdl bookmarks --download`
+- [x] Add notes to bookmarks: `bookdl bookmark <md5> -n "note"`
 
 ### 9. File Organization
 - [ ] Auto-organize downloads into folders
@@ -112,3 +113,4 @@ To work on an improvement:
 - [x] Download queue with multi-select (search -q) and queue management - v0.2.0
 - [x] Concurrent downloads with configurable limit (max_concurrent) - v0.2.0
 - [x] Better progress display with speed, ETA, colors, chunk info - v0.2.0
+- [x] Favorites/Bookmarks with notes and batch download - v0.2.0

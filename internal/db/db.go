@@ -50,6 +50,23 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_download ON chunks(download_id);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    md5_hash        TEXT UNIQUE NOT NULL,
+    title           TEXT NOT NULL,
+    authors         TEXT,
+    publisher       TEXT,
+    year            TEXT,
+    language        TEXT,
+    format          TEXT,
+    size            TEXT,
+    page_url        TEXT,
+    notes           TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmarks_hash ON bookmarks(md5_hash);
 `
 
 // Init initializes the database connection and schema
