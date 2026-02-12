@@ -158,7 +158,15 @@ downloads:
   path: "~/Downloads/books"
   max_concurrent: 2  # Number of simultaneous downloads
   chunk_size: 5242880  # 5MB chunks
+  timeout: 30m  # Maximum download timeout
   auto_resume: true
+  notifications: false  # Enable desktop notifications
+
+browser:
+  page_load_timeout: 60s  # Timeout for initial page load
+  max_countdown_wait: 90s  # Max time to wait for download countdown
+  poll_interval: 3s  # How often to check for download link
+  verbose_logging: false  # Enable detailed browser logging
 ```
 
 Environment variables can override config values with the `BOOKDL_` prefix:
@@ -175,6 +183,35 @@ export BOOKDL_ANNA_API_KEY=your-api-key
 4. **Resumable**: Downloads are split into chunks and tracked in a local SQLite database
 
 When Cloudflare protection is detected, bookdl automatically falls back to a headless browser to bypass the challenge.
+
+## Troubleshooting
+
+### Download Stuck on "Resolving download link"
+
+If a download gets stuck while resolving the download link (especially with slow_download URLs):
+
+1. **Increase browser timeout** - Some mirrors have long countdown timers:
+   ```bash
+   bookdl config set browser.max_countdown_wait 120s
+   ```
+
+2. **Enable verbose logging** to see what's happening:
+   ```bash
+   bookdl config set browser.verbose_logging true
+   ```
+
+3. **Try again** - The stuck download was automatically terminated. You can restart it:
+   ```bash
+   bookdl download <md5-hash>
+   ```
+
+### Progress Feedback
+
+The improved browser resolution now shows:
+- "Waiting for download link (max 90s)..." when starting
+- Progress updates every 15 seconds during countdown
+- "Download link found after Xs" when successful
+- Clear timeout messages if the limit is exceeded
 
 ## Project Structure
 

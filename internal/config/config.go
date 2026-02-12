@@ -15,6 +15,7 @@ type Config struct {
 	Downloads DownloadConfig `mapstructure:"downloads"`
 	Files     FileConfig     `mapstructure:"files"`
 	Network   NetworkConfig  `mapstructure:"network"`
+	Browser   BrowserConfig  `mapstructure:"browser"`
 }
 
 // AnnaConfig holds Anna's Archive settings
@@ -49,6 +50,14 @@ type NetworkConfig struct {
 	RetryMaxDelay     time.Duration `mapstructure:"retry_max_delay"`
 	RetryMultiplier   float64       `mapstructure:"retry_multiplier"`
 	UserAgent         string        `mapstructure:"user_agent"`
+}
+
+// BrowserConfig holds browser automation settings
+type BrowserConfig struct {
+	PageLoadTimeout     time.Duration `mapstructure:"page_load_timeout"`      // Timeout for initial page load
+	MaxCountdownWait    time.Duration `mapstructure:"max_countdown_wait"`     // Max time to wait for download countdown
+	PollInterval        time.Duration `mapstructure:"poll_interval"`          // How often to check for download link
+	VerboseLogging      bool          `mapstructure:"verbose_logging"`        // Enable detailed logging
 }
 
 var cfg *Config
@@ -89,6 +98,10 @@ func Init(cfgFile string) error {
 	viper.SetDefault("network.retry_max_delay", 30*time.Second)
 	viper.SetDefault("network.retry_multiplier", 2.0)
 	viper.SetDefault("network.user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	viper.SetDefault("browser.page_load_timeout", 60*time.Second)
+	viper.SetDefault("browser.max_countdown_wait", 90*time.Second)
+	viper.SetDefault("browser.poll_interval", 3*time.Second)
+	viper.SetDefault("browser.verbose_logging", false)
 
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)

@@ -121,3 +121,7 @@ To work on an improvement:
 - [x] Search history with filters and clear command - v0.2.0
 - [x] Exponential backoff retry with error categorization - v0.2.0
 - [x] Desktop notifications (Linux/macOS/Windows) - v0.2.0
+- [x] Browser timeout improvements with progress feedback - v0.3.0
+- [x] Configurable browser timeouts and polling intervals - v0.3.0
+- [x] Verbose browser logging for debugging - v0.3.0
+- [x] Fix database NULL error_message handling - v0.3.0

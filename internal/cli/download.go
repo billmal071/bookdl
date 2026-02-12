@@ -186,9 +186,17 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 			} else {
 				fmt.Printf("Resolving download link...\n")
 			}
-			resolvedURL, err := anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(ctx, tryURL)
+			// Use dlCtx which respects the configured timeout
+			resolvedURL, err := anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
 			if err != nil {
-				lastErr = err
+				// Check if it's a timeout error
+				if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
+					fmt.Printf("Browser resolution timed out. Try increasing browser.max_countdown_wait in config.\n")
+				}
+				lastErr = fmt.Errorf("failed to resolve download link: %w", err)
+				if i < len(urlsToTry)-1 {
+					fmt.Printf("Trying next mirror...\n")
+				}
 				continue
 			}
 			tryURL = resolvedURL

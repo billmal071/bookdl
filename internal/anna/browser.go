@@ -13,6 +13,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
+	"github.com/billmal071/bookdl/internal/config"
 )
 
 // silentLogger discards all log output
@@ -188,6 +189,8 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 
 // ResolveDownloadURL navigates to a slow_download page and extracts the actual download URL
 func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL string) (string, error) {
+	cfg := config.Get()
+
 	// Get a browser context from the shared pool
 	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
 	if err != nil {
@@ -195,11 +198,16 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 	}
 	defer cancel()
 
-	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 180*time.Second)
+	// Use configurable timeout
+	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, cfg.Browser.PageLoadTimeout+cfg.Browser.MaxCountdownWait)
 	defer timeoutCancel()
 
 	var htmlContent string
 	var downloadURL string
+
+	if cfg.Browser.VerboseLogging {
+		fmt.Printf("[Browser] Navigating to: %s\n", slowDownloadURL)
+	}
 
 	// Navigate to slow_download page and wait for download link to appear
 	err = chromedp.Run(browserCtx,
@@ -211,9 +219,28 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 		return "", fmt.Errorf("browser navigation failed: %w", err)
 	}
 
-	// Poll for the download link to appear (countdown timer varies, can be up to 60 seconds)
-	// Poll every 3 seconds for up to 2 minutes
-	for i := 0; i < 40; i++ {
+	if cfg.Browser.VerboseLogging {
+		fmt.Println("[Browser] Page loaded, waiting for download link...")
+	}
+
+	// Calculate polling parameters
+	pollInterval := cfg.Browser.PollInterval
+	maxWait := cfg.Browser.MaxCountdownWait
+	maxPolls := int(maxWait / pollInterval)
+
+	fmt.Printf("Waiting for download link (max %v)...\n", maxWait)
+
+	// Poll for the download link to appear with progress feedback
+	startTime := time.Now()
+	for i := 0; i < maxPolls; i++ {
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("operation cancelled")
+		case <-browserCtx.Done():
+			return "", fmt.Errorf("browser timeout exceeded")
+		default:
+		}
+
 		err = chromedp.Run(browserCtx,
 			chromedp.OuterHTML("html", &htmlContent),
 		)
@@ -223,37 +250,57 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 
 		downloadURL = extractDownloadURL(htmlContent, c.baseURL)
 		if downloadURL != "" {
+			elapsed := time.Since(startTime)
+			fmt.Printf("Download link found after %v\n", elapsed.Round(time.Second))
+			if cfg.Browser.VerboseLogging {
+				fmt.Printf("[Browser] Resolved URL: %s\n", downloadURL)
+			}
 			break
 		}
 
-		// Check if there's a countdown timer - if so, we should wait
-		if strings.Contains(htmlContent, "Please wait") ||
+		// Check if there's a countdown timer
+		hasCountdown := strings.Contains(htmlContent, "Please wait") ||
 			strings.Contains(htmlContent, "countdown") ||
-			strings.Contains(htmlContent, "seconds") {
-			// Wait 3 seconds before checking again
-			err = chromedp.Run(browserCtx, chromedp.Sleep(3*time.Second))
-			if err != nil {
-				return "", err
-			}
-			continue
-		}
+			strings.Contains(htmlContent, "seconds")
 
 		// Check if page shows an error or no files available
-		if strings.Contains(htmlContent, "No files available") ||
+		hasError := strings.Contains(htmlContent, "No files available") ||
 			strings.Contains(htmlContent, "File not found") ||
-			strings.Contains(htmlContent, "error") {
+			strings.Contains(htmlContent, "Error 404") ||
+			strings.Contains(htmlContent, "Error 403")
+
+		if hasError {
+			if cfg.Browser.VerboseLogging {
+				fmt.Println("[Browser] Error page detected")
+			}
 			break
+		}
+
+		// Show progress every 5 polls (15 seconds by default)
+		if i > 0 && i%5 == 0 {
+			elapsed := time.Since(startTime)
+			remaining := maxWait - elapsed
+			if hasCountdown {
+				fmt.Printf("Still waiting for countdown... (%v elapsed, %v remaining)\n",
+					elapsed.Round(time.Second), remaining.Round(time.Second))
+			}
+		}
+
+		if cfg.Browser.VerboseLogging && hasCountdown {
+			fmt.Printf("[Browser] Poll %d/%d: Countdown detected, waiting...\n", i+1, maxPolls)
 		}
 
 		// Wait before checking again
-		err = chromedp.Run(browserCtx, chromedp.Sleep(3*time.Second))
+		err = chromedp.Run(browserCtx, chromedp.Sleep(pollInterval))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("polling interrupted: %w", err)
 		}
 	}
 
 	if downloadURL == "" {
-		return "", fmt.Errorf("could not find download URL after waiting")
+		elapsed := time.Since(startTime)
+		return "", fmt.Errorf("could not find download URL after waiting %v (max: %v)",
+			elapsed.Round(time.Second), maxWait)
 	}
 
 	return downloadURL, nil

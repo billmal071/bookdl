@@ -75,6 +75,7 @@ func CreateDownload(d *Download) error {
 // GetDownload retrieves a download by ID
 func GetDownload(id int64) (*Download, error) {
 	d := &Download{}
+	var errMsg sql.NullString
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
@@ -82,10 +83,13 @@ func GetDownload(id int64) (*Download, error) {
 		FROM downloads WHERE id = ?`, id).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &d.ErrorMessage, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if errMsg.Valid {
+		d.ErrorMessage = errMsg.String
 	}
 	return d, nil
 }
@@ -93,6 +97,7 @@ func GetDownload(id int64) (*Download, error) {
 // GetDownloadByHash retrieves a download by MD5 hash
 func GetDownloadByHash(hash string) (*Download, error) {
 	d := &Download{}
+	var errMsg sql.NullString
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
@@ -100,10 +105,13 @@ func GetDownloadByHash(hash string) (*Download, error) {
 		FROM downloads WHERE md5_hash = ?`, hash).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &d.ErrorMessage, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if errMsg.Valid {
+		d.ErrorMessage = errMsg.String
 	}
 	return d, nil
 }
@@ -144,13 +152,17 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 	var downloads []*Download
 	for rows.Next() {
 		d := &Download{}
+		var errMsg sql.NullString
 		err := rows.Scan(
 			&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 			&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-			&d.TempPath, &d.Status, &d.ErrorMessage, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if errMsg.Valid {
+			d.ErrorMessage = errMsg.String
 		}
 		downloads = append(downloads, d)
 	}
