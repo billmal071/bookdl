@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"io"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -88,14 +90,16 @@ func (d BookDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 // SelectorModel is the Bubble Tea model for book selection
 type SelectorModel struct {
-	list       list.Model
-	selected   *anna.Book
-	quitting   bool
-	err        error
-	loadMore   LoadMoreFunc
-	loading    bool
-	seenMD5s   map[string]bool
+	list          list.Model
+	selected      *anna.Book
+	quitting      bool
+	err           error
+	loadMore      LoadMoreFunc
+	loading       bool
+	seenMD5s      map[string]bool
 	noMoreResults bool
+	showDetails   bool
+	browserMsg    string
 }
 
 // NewSelector creates a new book selector TUI
@@ -155,6 +159,25 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loading = true
 				return m, m.doLoadMore()
 			}
+		case "i", "I":
+			// Toggle details view
+			m.showDetails = !m.showDetails
+			m.browserMsg = ""
+			return m, nil
+		case "o", "O":
+			// Open book page in browser
+			if item, ok := m.list.SelectedItem().(BookItem); ok {
+				if item.Book.PageURL != "" {
+					if err := openBrowser(item.Book.PageURL); err != nil {
+						m.browserMsg = ErrorStyle.Render("Failed to open browser")
+					} else {
+						m.browserMsg = SuccessStyle.Render("Opened in browser")
+					}
+				} else {
+					m.browserMsg = WarningStyle.Render("No URL available")
+				}
+			}
+			return m, nil
 		}
 	case loadMoreMsg:
 		m.loading = false
@@ -202,6 +225,91 @@ func (m SelectorModel) doLoadMore() tea.Cmd {
 	}
 }
 
+// openBrowser opens a URL in the default browser
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+	return cmd.Start()
+}
+
+// renderDetailsView renders the book details panel
+func (m SelectorModel) renderDetailsView() string {
+	item, ok := m.list.SelectedItem().(BookItem)
+	if !ok {
+		return ""
+	}
+	book := item.Book
+
+	var sb strings.Builder
+	sb.WriteString(TitleStyle.Render("📖 Book Details") + "\n\n")
+
+	// Title
+	sb.WriteString(LabelStyle.Render("Title:    "))
+	sb.WriteString(ValueStyle.Render(book.Title) + "\n")
+
+	// Authors
+	if book.Authors != "" {
+		sb.WriteString(LabelStyle.Render("Authors:  "))
+		sb.WriteString(ValueStyle.Render(book.Authors) + "\n")
+	}
+
+	// Publisher
+	if book.Publisher != "" {
+		sb.WriteString(LabelStyle.Render("Publisher:"))
+		sb.WriteString(ValueStyle.Render(" " + book.Publisher) + "\n")
+	}
+
+	// Year
+	if book.Year != "" {
+		sb.WriteString(LabelStyle.Render("Year:     "))
+		sb.WriteString(ValueStyle.Render(book.Year) + "\n")
+	}
+
+	// Language
+	if book.Language != "" {
+		sb.WriteString(LabelStyle.Render("Language: "))
+		sb.WriteString(ValueStyle.Render(book.Language) + "\n")
+	}
+
+	// Format
+	if book.Format != "" {
+		sb.WriteString(LabelStyle.Render("Format:   "))
+		sb.WriteString(ValueStyle.Render(book.Format) + "\n")
+	}
+
+	// Size
+	if book.Size != "" {
+		sb.WriteString(LabelStyle.Render("Size:     "))
+		sb.WriteString(ValueStyle.Render(book.Size) + "\n")
+	}
+
+	// MD5 Hash
+	sb.WriteString(LabelStyle.Render("MD5:      "))
+	sb.WriteString(ValueStyle.Render(book.MD5Hash) + "\n")
+
+	// Page URL
+	if book.PageURL != "" {
+		sb.WriteString(LabelStyle.Render("URL:      "))
+		// Truncate URL if too long
+		url := book.PageURL
+		if len(url) > 50 {
+			url = url[:47] + "..."
+		}
+		sb.WriteString(DimStyle.Render(url) + "\n")
+	}
+
+	return DetailsBoxStyle.Render(sb.String())
+}
+
 func (m SelectorModel) View() string {
 	if m.err != nil {
 		return ErrorStyle.Render(fmt.Sprintf("\n  Error: %s\n", m.err.Error()))
@@ -221,14 +329,36 @@ func (m SelectorModel) View() string {
 	}
 
 	// Build help text
-	helpParts := []string{"↑/↓: navigate", "enter: select"}
-	if m.loadMore != nil && !m.noMoreResults {
-		helpParts = append(helpParts, "m: more results")
+	helpParts := []string{"↑/↓: navigate", "enter: select", "i: details"}
+	if m.showDetails {
+		helpParts = append(helpParts, "o: open in browser")
 	}
-	helpParts = append(helpParts, "q/esc: cancel")
+	if m.loadMore != nil && !m.noMoreResults {
+		helpParts = append(helpParts, "m: more")
+	}
+	helpParts = append(helpParts, "q: cancel")
 	help := HelpStyle.Render("  " + strings.Join(helpParts, " • "))
 
-	return "\n" + m.list.View() + "\n" + help
+	// Build the view
+	var view strings.Builder
+	view.WriteString("\n")
+	view.WriteString(m.list.View())
+
+	// Show details panel if enabled
+	if m.showDetails {
+		view.WriteString("\n")
+		view.WriteString(m.renderDetailsView())
+	}
+
+	// Show browser message if any
+	if m.browserMsg != "" {
+		view.WriteString("\n  " + m.browserMsg)
+	}
+
+	view.WriteString("\n")
+	view.WriteString(help)
+
+	return view.String()
 }
 
 // Selected returns the selected book

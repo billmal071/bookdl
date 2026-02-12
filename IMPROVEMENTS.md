@@ -30,11 +30,10 @@ This document tracks potential improvements and features for bookdl. Items are o
 
 ## Medium Priority
 
-### 5. Book Details View
-- [ ] Press 'i' in selector to view full book info
-- [ ] Show description, publisher, year, ISBN, page count
-- [ ] Show all available formats and sizes
-- [ ] Option to open book page in browser
+### ~~5. Book Details View~~ ✓
+- [x] Press 'i' in selector to view full book info
+- [x] Show publisher, year, language, format, size, MD5, URL
+- [x] Option to open book page in browser (press 'o')
 
 ### 6. Search History
 - [ ] Store recent searches in database
@@ -108,3 +107,4 @@ To work on an improvement:
 - [x] Load more results in search (press 'm' for more) - v0.1.0
 - [x] Pagination support for search - v0.1.0
 - [x] Fix FormatSize display function - v0.1.0
+- [x] Book details view (press 'i') with open in browser (press 'o') - v0.2.0

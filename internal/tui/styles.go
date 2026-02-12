@@ -63,6 +63,22 @@ var (
 
 	ProgressCompleteStyle = lipgloss.NewStyle().
 				Foreground(successColor)
+
+	// Label style for details view
+	LabelStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor).
+			Bold(true)
+
+	// Value style for details view
+	ValueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
+
+	// Details box style
+	DetailsBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(1, 2).
+				MarginTop(1)
 )
 
 // FormatSize formats bytes into human readable format
