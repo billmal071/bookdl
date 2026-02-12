@@ -295,15 +295,24 @@ func (m *Manager) downloadSimple(ctx context.Context, download *db.Download) err
 	// Create styled progress bar with speed and ETA
 	bar := createProgressBar(resp.ContentLength, "Downloading")
 
-	// Read the first few bytes to validate content
-	header := make([]byte, 512)
+	// Read the first 2KB to validate content (larger buffer catches more HTML errors)
+	header := make([]byte, 2048)
 	n, _ := io.ReadFull(resp.Body, header)
 	if n > 0 {
 		// Check for HTML content by looking at the beginning
 		headerStr := strings.ToLower(string(header[:n]))
 		if strings.Contains(headerStr, "<!doctype html") ||
 			strings.Contains(headerStr, "<html") ||
-			strings.Contains(headerStr, "<head") {
+			strings.Contains(headerStr, "<head") ||
+			strings.Contains(headerStr, "<body") ||
+			strings.Contains(headerStr, "<title>") ||
+			strings.Contains(headerStr, "<!doctype") ||
+			strings.Contains(headerStr, "<script") ||
+			strings.Contains(headerStr, "cloudflare") ||
+			strings.Contains(headerStr, "captcha") ||
+			strings.Contains(headerStr, "access denied") ||
+			strings.Contains(headerStr, "error 403") ||
+			strings.Contains(headerStr, "error 404") {
 			return ErrHTMLContent
 		}
 
