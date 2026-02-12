@@ -82,7 +82,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	client := anna.NewClient()
 
 	if bookInfo == nil {
-		Printf("Fetching book information...\n")
+		fmt.Printf("Fetching book information...\n")
 		books, err := client.Search(ctx, md5Hash, 1)
 		if err == nil && len(books) > 0 {
 			bookInfo = books[0]
@@ -90,7 +90,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	}
 
 	// Get download links
-	Printf("Getting download links...\n")
+	fmt.Printf("Getting download links...\n")
 	dlInfo, err := client.GetDownloadInfo(ctx, md5Hash)
 	if err != nil {
 		return fmt.Errorf("failed to get download info: %w", err)
@@ -178,7 +178,9 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		// For slow_download/fast_download URLs, resolve them via browser
 		if strings.Contains(tryURL, "/slow_download/") || strings.Contains(tryURL, "/fast_download/") {
 			if i > 0 {
-				Printf("Trying mirror %d: resolving download link...\n", i+1)
+				fmt.Printf("Trying mirror %d: resolving download link...\n", i+1)
+			} else {
+				fmt.Printf("Resolving download link...\n")
 			}
 			resolvedURL, err := anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(ctx, tryURL)
 			if err != nil {
@@ -203,7 +205,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 
 		// Check if it's an HTML content error - try next mirror
 		if err == downloader.ErrHTMLContent {
-			Printf("Received HTML instead of file, trying next mirror...\n")
+			fmt.Printf("Received HTML instead of file, trying next mirror...\n")
 			lastErr = err
 			continue
 		}
@@ -211,7 +213,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		// For other errors, also try next mirror
 		lastErr = err
 		if i < len(urlsToTry)-1 {
-			Printf("Download failed (%v), trying next mirror...\n", err)
+			fmt.Printf("Download failed (%v), trying next mirror...\n", err)
 		}
 	}
 
