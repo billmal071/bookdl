@@ -71,13 +71,15 @@ func sendLinuxNotification(title, message, notifyType string) {
 	}
 
 	cmd := exec.Command("notify-send", "-i", icon, "-a", "bookdl", title, message)
-	cmd.Run()
+	// Ignore errors - notification tools may not be installed
+	_ = cmd.Run()
 }
 
 func sendMacNotification(title, message string) {
 	script := `display notification "` + escapeAppleScript(message) + `" with title "` + escapeAppleScript(title) + `"`
 	cmd := exec.Command("osascript", "-e", script)
-	cmd.Run()
+	// Ignore errors - osascript should always be available on macOS
+	_ = cmd.Run()
 }
 
 func sendWindowsNotification(title, message string) {
@@ -92,7 +94,8 @@ func sendWindowsNotification(title, message string) {
 	[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("bookdl").Show($toast)
 	`
 	cmd := exec.Command("powershell", "-Command", script)
-	cmd.Run()
+	// Ignore errors - toast notifications may not be available on all Windows versions
+	_ = cmd.Run()
 }
 
 func escapeAppleScript(s string) string {

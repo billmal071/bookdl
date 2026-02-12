@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
+	"github.com/billmal071/bookdl/internal/notify"
 )
 
 var resumeCmd = &cobra.Command{
@@ -152,6 +153,9 @@ func resumeAll(ctx context.Context) error {
 			fmt.Printf("  - %s\n", err)
 		}
 	}
+
+	// Send queue completion notification
+	notify.QueueComplete(completed, len(errors))
 
 	return nil
 }
