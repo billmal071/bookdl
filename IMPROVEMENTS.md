@@ -54,11 +54,12 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] Download all bookmarks: `bookdl bookmarks --download`
 - [x] Add notes to bookmarks: `bookdl bookmark <md5> -n "note"`
 
-### 9. File Organization
-- [ ] Auto-organize downloads into folders
-- [ ] Configurable patterns: `{author}/{title}.{format}`
-- [ ] Options: by author, by format, by year, flat
-- [ ] Rename files based on metadata
+### ~~9. File Organization~~ ✓
+- [x] Auto-organize downloads into folders
+- [x] Configurable patterns: `{author}/{title}.{format}`
+- [x] Options: by author, by format, by year, flat
+- [x] Rename files based on metadata
+- [x] Configure via: `bookdl config organize [mode]`
 
 ## Lower Priority
 
@@ -114,3 +115,4 @@ To work on an improvement:
 - [x] Concurrent downloads with configurable limit (max_concurrent) - v0.2.0
 - [x] Better progress display with speed, ETA, colors, chunk info - v0.2.0
 - [x] Favorites/Bookmarks with notes and batch download - v0.2.0
+- [x] File organization by author/format/year/custom pattern - v0.2.0

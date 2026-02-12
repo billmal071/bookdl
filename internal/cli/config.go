@@ -63,8 +63,80 @@ var configPathCmd = &cobra.Command{
 	},
 }
 
+var configOrganizeCmd = &cobra.Command{
+	Use:   "organize [mode]",
+	Short: "Set file organization mode",
+	Long: `Set how downloaded files are organized.
+
+Available modes:
+  flat     - All files in the download directory (default)
+  author   - Organize by author name
+  format   - Organize by file format (EPUB, PDF, etc.)
+  year     - Organize by publication year
+  custom   - Use a custom pattern (set with --pattern)
+
+Examples:
+  bookdl config organize author
+  bookdl config organize custom --pattern "{author}/{year}"
+  bookdl config organize flat`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		mode := args[0]
+
+		// Validate mode
+		validModes := []string{"flat", "author", "format", "year", "custom"}
+		valid := false
+		for _, m := range validModes {
+			if mode == m {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("invalid mode: %s (use flat, author, format, year, or custom)", mode)
+		}
+
+		// Set the mode
+		if err := config.Set("files.organize_mode", mode); err != nil {
+			return fmt.Errorf("failed to set organize mode: %w", err)
+		}
+
+		// If custom mode, also set pattern if provided
+		pattern, _ := cmd.Flags().GetString("pattern")
+		if mode == "custom" && pattern != "" {
+			if err := config.Set("files.organize_pattern", pattern); err != nil {
+				return fmt.Errorf("failed to set pattern: %w", err)
+			}
+			Successf("File organization set to: %s (pattern: %s)", mode, pattern)
+		} else {
+			Successf("File organization set to: %s", mode)
+		}
+
+		// Handle rename flag
+		rename, _ := cmd.Flags().GetBool("rename")
+		if cmd.Flags().Changed("rename") {
+			renameStr := "false"
+			if rename {
+				renameStr = "true"
+			}
+			if err := config.Set("files.rename_files", renameStr); err != nil {
+				return fmt.Errorf("failed to set rename option: %w", err)
+			}
+			if rename {
+				fmt.Println("Files will be renamed based on metadata.")
+			}
+		}
+
+		return nil
+	},
+}
+
 func init() {
+	configOrganizeCmd.Flags().StringP("pattern", "p", "", "custom organization pattern (for custom mode)")
+	configOrganizeCmd.Flags().Bool("rename", false, "rename files based on metadata")
+
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configPathCmd)
+	configCmd.AddCommand(configOrganizeCmd)
 }

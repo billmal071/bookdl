@@ -34,7 +34,9 @@ type DownloadConfig struct {
 // FileConfig holds file preferences
 type FileConfig struct {
 	PreferredFormats []string `mapstructure:"preferred_formats"`
-	OrganizeByAuthor bool     `mapstructure:"organize_by_author"`
+	OrganizeMode     string   `mapstructure:"organize_mode"`     // flat, author, format, year, custom
+	OrganizePattern  string   `mapstructure:"organize_pattern"`  // custom pattern like {author}/{year}/{title}
+	RenameFiles      bool     `mapstructure:"rename_files"`      // rename files based on metadata
 }
 
 // NetworkConfig holds network settings
@@ -71,7 +73,9 @@ func Init(cfgFile string) error {
 	viper.SetDefault("downloads.max_concurrent", 2)
 	viper.SetDefault("downloads.auto_resume", true)
 	viper.SetDefault("files.preferred_formats", []string{"epub", "pdf"})
-	viper.SetDefault("files.organize_by_author", false)
+	viper.SetDefault("files.organize_mode", "flat")
+	viper.SetDefault("files.organize_pattern", "{author}/{title}")
+	viper.SetDefault("files.rename_files", false)
 	viper.SetDefault("network.timeout", 30*time.Second)
 	viper.SetDefault("network.retry_attempts", 3)
 	viper.SetDefault("network.user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")

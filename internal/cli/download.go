@@ -114,7 +114,14 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		filename = fmt.Sprintf("%s.epub", md5Hash)
 	}
 
-	filePath := filepath.Join(outputDir, filename)
+	// Apply file organization based on config
+	filePath := OrganizedPath(outputDir, bookInfo, filename)
+
+	// Ensure the organized directory exists
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
 	tempPath := filePath + ".part"
 
 	// Create download record
