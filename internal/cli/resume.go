@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
 	"github.com/billmal071/bookdl/internal/notify"
@@ -62,7 +63,12 @@ func resumeOne(ctx context.Context, id int64) error {
 
 	mgr := downloader.NewManager()
 
-	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	// Use configurable timeout
+	timeout := config.Get().Downloads.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+	dlCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	if err := mgr.StartDownload(dlCtx, download); err != nil {

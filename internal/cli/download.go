@@ -161,8 +161,12 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	// Create download manager and start download
 	mgr := downloader.NewManager()
 
-	// Create context with timeout
-	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	// Create context with configurable timeout
+	timeout := config.Get().Downloads.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Minute
+	}
+	dlCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// Collect all possible URLs to try

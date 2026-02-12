@@ -25,11 +25,12 @@ type AnnaConfig struct {
 
 // DownloadConfig holds download settings
 type DownloadConfig struct {
-	Path          string `mapstructure:"path"`
-	ChunkSize     int64  `mapstructure:"chunk_size"`
-	MaxConcurrent int    `mapstructure:"max_concurrent"`
-	AutoResume    bool   `mapstructure:"auto_resume"`
-	Notifications bool   `mapstructure:"notifications"`
+	Path          string        `mapstructure:"path"`
+	ChunkSize     int64         `mapstructure:"chunk_size"`
+	MaxConcurrent int           `mapstructure:"max_concurrent"`
+	Timeout       time.Duration `mapstructure:"timeout"`
+	AutoResume    bool          `mapstructure:"auto_resume"`
+	Notifications bool          `mapstructure:"notifications"`
 }
 
 // FileConfig holds file preferences
@@ -75,6 +76,7 @@ func Init(cfgFile string) error {
 	viper.SetDefault("downloads.path", "~/Downloads/books")
 	viper.SetDefault("downloads.chunk_size", 5*1024*1024) // 5MB
 	viper.SetDefault("downloads.max_concurrent", 2)
+	viper.SetDefault("downloads.timeout", 30*time.Minute)
 	viper.SetDefault("downloads.auto_resume", true)
 	viper.SetDefault("downloads.notifications", false)
 	viper.SetDefault("files.preferred_formats", []string{"epub", "pdf"})
