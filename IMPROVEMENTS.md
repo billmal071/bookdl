@@ -78,10 +78,11 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [ ] Fish shell support
 - [ ] Dynamic completion for download IDs
 
-### 13. Retry with Exponential Backoff
-- [ ] Smarter retry logic for transient failures
-- [ ] Configurable max retries and backoff multiplier
-- [ ] Different strategies per error type
+### ~~13. Retry with Exponential Backoff~~ ✓
+- [x] Smarter retry logic for transient failures
+- [x] Configurable max retries and backoff multiplier
+- [x] Different strategies per error type (retryable, non-retryable, rate-limited)
+- [x] Jitter to prevent thundering herd
 
 ### 14. Notifications
 - [ ] Desktop notifications on download complete (optional)
@@ -117,3 +118,4 @@ To work on an improvement:
 - [x] Favorites/Bookmarks with notes and batch download - v0.2.0
 - [x] File organization by author/format/year/custom pattern - v0.2.0
 - [x] Search history with filters and clear command - v0.2.0
+- [x] Exponential backoff retry with error categorization - v0.2.0

@@ -41,9 +41,12 @@ type FileConfig struct {
 
 // NetworkConfig holds network settings
 type NetworkConfig struct {
-	Timeout       time.Duration `mapstructure:"timeout"`
-	RetryAttempts int           `mapstructure:"retry_attempts"`
-	UserAgent     string        `mapstructure:"user_agent"`
+	Timeout           time.Duration `mapstructure:"timeout"`
+	RetryAttempts     int           `mapstructure:"retry_attempts"`
+	RetryBaseDelay    time.Duration `mapstructure:"retry_base_delay"`
+	RetryMaxDelay     time.Duration `mapstructure:"retry_max_delay"`
+	RetryMultiplier   float64       `mapstructure:"retry_multiplier"`
+	UserAgent         string        `mapstructure:"user_agent"`
 }
 
 var cfg *Config
@@ -77,7 +80,10 @@ func Init(cfgFile string) error {
 	viper.SetDefault("files.organize_pattern", "{author}/{title}")
 	viper.SetDefault("files.rename_files", false)
 	viper.SetDefault("network.timeout", 30*time.Second)
-	viper.SetDefault("network.retry_attempts", 3)
+	viper.SetDefault("network.retry_attempts", 5)
+	viper.SetDefault("network.retry_base_delay", 1*time.Second)
+	viper.SetDefault("network.retry_max_delay", 30*time.Second)
+	viper.SetDefault("network.retry_multiplier", 2.0)
 	viper.SetDefault("network.user_agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	if cfgFile != "" {

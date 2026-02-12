@@ -18,8 +18,6 @@ import (
 const (
 	// DefaultChunkSize is 5MB
 	DefaultChunkSize = 5 * 1024 * 1024
-	// MaxRetries for failed requests
-	MaxRetries = 3
 )
 
 // createProgressBar creates a styled progress bar with speed, ETA, and colors
@@ -424,35 +422,36 @@ func (m *Manager) downloadChunk(ctx context.Context, download *db.Download, chun
 	// Calculate resume position
 	startPos := chunk.StartByte + chunk.Downloaded
 
-	req, err := http.NewRequestWithContext(ctx, "GET", download.DownloadURL, nil)
+	var resp *http.Response
+	retryCfg := DefaultRetryConfig()
+
+	// Retry with exponential backoff
+	err := RetryOperation(ctx, retryCfg, func() (int, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", download.DownloadURL, nil)
+		if err != nil {
+			return 0, err
+		}
+
+		req.Header.Set("User-Agent", config.Get().Network.UserAgent)
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", startPos, chunk.EndByte))
+
+		var reqErr error
+		resp, reqErr = m.httpClient.Do(req)
+		if reqErr != nil {
+			return 0, reqErr
+		}
+
+		if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+			statusCode := resp.StatusCode
+			resp.Body.Close()
+			return statusCode, fmt.Errorf("server returned %d", statusCode)
+		}
+
+		return resp.StatusCode, nil
+	})
+
 	if err != nil {
 		return err
-	}
-
-	req.Header.Set("User-Agent", config.Get().Network.UserAgent)
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", startPos, chunk.EndByte))
-
-	var resp *http.Response
-	var lastErr error
-
-	// Retry logic
-	for attempt := 0; attempt < MaxRetries; attempt++ {
-		resp, err = m.httpClient.Do(req)
-		if err == nil && (resp.StatusCode == http.StatusPartialContent || resp.StatusCode == http.StatusOK) {
-			break
-		}
-		if resp != nil {
-			resp.Body.Close()
-		}
-		lastErr = err
-		if err == nil {
-			lastErr = fmt.Errorf("server returned %d", resp.StatusCode)
-		}
-		time.Sleep(time.Second * time.Duration(attempt+1))
-	}
-
-	if lastErr != nil {
-		return lastErr
 	}
 	defer resp.Body.Close()
 
