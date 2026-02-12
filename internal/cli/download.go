@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/williams/bookdl/internal/anna"
-	"github.com/williams/bookdl/internal/config"
-	"github.com/williams/bookdl/internal/db"
-	"github.com/williams/bookdl/internal/downloader"
+	"github.com/billmal071/bookdl/internal/anna"
+	"github.com/billmal071/bookdl/internal/config"
+	"github.com/billmal071/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/downloader"
 )
 
 var downloadCmd = &cobra.Command{

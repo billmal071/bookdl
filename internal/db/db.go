@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/williams/bookdl/internal/config"
+	"github.com/billmal071/bookdl/internal/config"
 	_ "modernc.org/sqlite"
 )
 

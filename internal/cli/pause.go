@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/williams/bookdl/internal/db"
-	"github.com/williams/bookdl/internal/downloader"
+	"github.com/billmal071/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/downloader"
 )
 
 var pauseCmd = &cobra.Command{

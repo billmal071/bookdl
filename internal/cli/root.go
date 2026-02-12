@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/williams/bookdl/internal/config"
-	"github.com/williams/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/config"
+	"github.com/billmal071/bookdl/internal/db"
 )
 
 var (

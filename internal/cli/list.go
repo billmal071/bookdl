@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/williams/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/db"
 )
 
 var listCmd = &cobra.Command{

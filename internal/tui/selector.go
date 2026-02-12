@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/williams/bookdl/internal/anna"
+	"github.com/billmal071/bookdl/internal/anna"
 )
 
 // LoadMoreFunc is a callback to load more search results
@@ -113,11 +113,13 @@ func NewSelectorWithLoadMore(books []*anna.Book, title string, loadMore LoadMore
 	}
 
 	delegate := BookDelegate{}
-	l := list.New(items, delegate, 70, 4+len(books)*3)
+	// Use a fixed reasonable height that allows scrolling
+	// The list component handles scrolling internally
+	l := list.New(items, delegate, 80, 20)
 	l.Title = title
-	l.SetShowStatusBar(false)
+	l.SetShowStatusBar(true)
 	l.SetFilteringEnabled(false)
-	l.SetShowHelp(true)
+	l.SetShowHelp(false) // We show our own help
 	l.Styles.Title = TitleStyle
 
 	return SelectorModel{
@@ -180,8 +182,7 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		currentItems := m.list.Items()
 		allItems := append(currentItems, newItems...)
 		m.list.SetItems(allItems)
-		// Adjust height for new items
-		m.list.SetHeight(4 + len(allItems)*3)
+		// Don't change height - let the list handle scrolling
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)

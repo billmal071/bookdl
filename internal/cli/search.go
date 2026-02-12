@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/williams/bookdl/internal/anna"
-	"github.com/williams/bookdl/internal/tui"
+	"github.com/billmal071/bookdl/internal/anna"
+	"github.com/billmal071/bookdl/internal/tui"
 )
 
 var searchCmd = &cobra.Command{

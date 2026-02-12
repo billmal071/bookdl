@@ -17,7 +17,7 @@ A command-line tool for searching and downloading books from Anna's Archive.
 
 ```bash
 # Clone the repository
-git clone https://github.com/williams/bookdl.git
+git clone https://github.com/billmal071/bookdl.git
 cd bookdl
 
 # Build

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/schollz/progressbar/v3"
-	"github.com/williams/bookdl/internal/config"
-	"github.com/williams/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/config"
+	"github.com/billmal071/bookdl/internal/db"
 )
 
 const (

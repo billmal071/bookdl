@@ -1,4 +1,4 @@
-module github.com/williams/bookdl
+module github.com/billmal071/bookdl
 
 go 1.22
 

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/williams/bookdl/internal/cli"
+	"github.com/billmal071/bookdl/internal/cli"
 )
 
 func main() {

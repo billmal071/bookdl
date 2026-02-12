@@ -8,7 +8,7 @@ BINARY_NAME=bookdl
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DIR=./build
-LDFLAGS=-ldflags "-X github.com/williams/bookdl/internal/cli.Version=$(VERSION) -X github.com/williams/bookdl/internal/cli.Commit=$(COMMIT)"
+LDFLAGS=-ldflags "-X github.com/billmal071/bookdl/internal/cli.Version=$(VERSION) -X github.com/billmal071/bookdl/internal/cli.Commit=$(COMMIT)"
 
 # Default target
 all: build

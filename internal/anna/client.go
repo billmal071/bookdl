@@ -1,7 +1,7 @@
 package anna
 
 import (
-	"github.com/williams/bookdl/internal/config"
+	"github.com/billmal071/bookdl/internal/config"
 )
 
 // NewClient creates a new Anna's Archive client
