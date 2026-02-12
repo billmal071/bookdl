@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 )
@@ -42,6 +43,7 @@ Examples:
 		return nil
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		anna.CloseBrowser()
 		db.Close()
 	},
 }

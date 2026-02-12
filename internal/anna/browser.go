@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -16,6 +17,86 @@ import (
 
 // silentLogger discards all log output
 var silentLogger = log.New(io.Discard, "", 0)
+
+// browserPool manages a shared browser instance for reuse
+type browserPool struct {
+	mu          sync.Mutex
+	allocCtx    context.Context
+	allocCancel context.CancelFunc
+	browserCtx  context.Context
+	cancelFunc  context.CancelFunc
+	inUse       bool
+}
+
+var sharedBrowserPool = &browserPool{}
+
+// getBrowserContext returns a reusable browser context
+func (p *browserPool) getBrowserContext(parentCtx context.Context) (context.Context, context.CancelFunc, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Check if existing browser is still valid
+	if p.browserCtx != nil {
+		select {
+		case <-p.browserCtx.Done():
+			// Browser context was cancelled, need to recreate
+			p.cleanup()
+		default:
+			// Browser is still valid, create a new tab context
+			tabCtx, tabCancel := chromedp.NewContext(p.browserCtx,
+				chromedp.WithLogf(silentLogger.Printf),
+				chromedp.WithErrorf(silentLogger.Printf),
+			)
+			return tabCtx, tabCancel, nil
+		}
+	}
+
+	// Create new browser instance
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+	)
+
+	p.allocCtx, p.allocCancel = chromedp.NewExecAllocator(context.Background(), opts...)
+	p.browserCtx, p.cancelFunc = chromedp.NewContext(p.allocCtx,
+		chromedp.WithLogf(silentLogger.Printf),
+		chromedp.WithErrorf(silentLogger.Printf),
+	)
+
+	// Create a tab context for this request
+	tabCtx, tabCancel := chromedp.NewContext(p.browserCtx,
+		chromedp.WithLogf(silentLogger.Printf),
+		chromedp.WithErrorf(silentLogger.Printf),
+	)
+
+	return tabCtx, tabCancel, nil
+}
+
+// cleanup releases browser resources
+func (p *browserPool) cleanup() {
+	if p.cancelFunc != nil {
+		p.cancelFunc()
+		p.cancelFunc = nil
+	}
+	if p.allocCancel != nil {
+		p.allocCancel()
+		p.allocCancel = nil
+	}
+	p.browserCtx = nil
+	p.allocCtx = nil
+}
+
+// CloseBrowser closes the shared browser instance
+func CloseBrowser() {
+	sharedBrowserPool.mu.Lock()
+	defer sharedBrowserPool.mu.Unlock()
+	sharedBrowserPool.cleanup()
+}
 
 // BrowserClient uses a headless browser to access Anna's Archive
 // This is used as a fallback when Cloudflare blocks regular HTTP requests
@@ -38,26 +119,12 @@ func (c *BrowserClient) Search(ctx context.Context, query string, limit int) ([]
 
 // SearchPage searches for books with pagination using a headless browser
 func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int, page int) ([]*Book, error) {
-	// Create browser context with options
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("disable-background-networking", true),
-		chromedp.Flag("disable-extensions", true),
-		chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-	)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
-
-	// Suppress chromedp debug/error logs
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx,
-		chromedp.WithLogf(silentLogger.Printf),
-		chromedp.WithErrorf(silentLogger.Printf),
-	)
-	defer browserCancel()
+	// Get a browser context from the shared pool
+	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get browser context: %w", err)
+	}
+	defer cancel()
 
 	// Set timeout
 	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
@@ -70,7 +137,7 @@ func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int,
 	}
 
 	var htmlContent string
-	err := chromedp.Run(browserCtx,
+	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(searchURL),
 		// Wait for page to load (Cloudflare challenge should resolve)
 		chromedp.Sleep(5*time.Second),
@@ -94,25 +161,12 @@ func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int,
 
 // GetDownloadInfo retrieves download links using a headless browser
 func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("disable-background-networking", true),
-		chromedp.Flag("disable-extensions", true),
-		chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-	)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
-
-	// Suppress chromedp debug/error logs
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx,
-		chromedp.WithLogf(silentLogger.Printf),
-		chromedp.WithErrorf(silentLogger.Printf),
-	)
-	defer browserCancel()
+	// Get a browser context from the shared pool
+	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get browser context: %w", err)
+	}
+	defer cancel()
 
 	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
 	defer timeoutCancel()
@@ -120,7 +174,7 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 	pageURL := fmt.Sprintf("https://%s/md5/%s", c.baseURL, md5Hash)
 
 	var htmlContent string
-	err := chromedp.Run(browserCtx,
+	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(pageURL),
 		chromedp.Sleep(5*time.Second),
 		chromedp.OuterHTML("html", &htmlContent),
@@ -134,24 +188,12 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 
 // ResolveDownloadURL navigates to a slow_download page and extracts the actual download URL
 func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL string) (string, error) {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("disable-background-networking", true),
-		chromedp.Flag("disable-extensions", true),
-		chromedp.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-	)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
-
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx,
-		chromedp.WithLogf(silentLogger.Printf),
-		chromedp.WithErrorf(silentLogger.Printf),
-	)
-	defer browserCancel()
+	// Get a browser context from the shared pool
+	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get browser context: %w", err)
+	}
+	defer cancel()
 
 	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 180*time.Second)
 	defer timeoutCancel()
@@ -160,7 +202,7 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 	var downloadURL string
 
 	// Navigate to slow_download page and wait for download link to appear
-	err := chromedp.Run(browserCtx,
+	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(slowDownloadURL),
 		// Wait for anti-bot challenge to resolve (longer wait for Cloudflare)
 		chromedp.Sleep(8*time.Second),
