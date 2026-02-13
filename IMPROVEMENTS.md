@@ -63,20 +63,20 @@ This document tracks potential improvements and features for bookdl. Items are o
 
 ## Lower Priority
 
-### 10. Integrity Verification
-- [ ] Verify MD5/SHA checksums after download
-- [ ] Re-download corrupted files automatically
-- [ ] Show verification status in `bookdl list`
+### ~~10. Integrity Verification~~ ✓
+- [x] Verify MD5/SHA checksums after download
+- [x] Re-download corrupted files automatically
+- [x] Show verification status in `bookdl list`
 
 ### 11. Export/Import
 - [ ] Export download history: `bookdl export history.json`
 - [ ] Export bookmarks: `bookdl export --bookmarks`
 - [ ] Import from backup: `bookdl import history.json`
 
-### 12. Shell Completions
-- [ ] Enhanced zsh completions with descriptions
-- [ ] Fish shell support
-- [ ] Dynamic completion for download IDs
+### ~~12. Shell Completions~~ ✓
+- [x] Enhanced zsh completions with descriptions
+- [x] Fish shell support
+- [x] Dynamic completion for download IDs
 
 ### ~~13. Retry with Exponential Backoff~~ ✓
 - [x] Smarter retry logic for transient failures
@@ -90,10 +90,10 @@ This document tracks potential improvements and features for bookdl. Items are o
 - [x] macOS/Linux/Windows support
 - [x] Enable/disable via: `bookdl config notify on/off`
 
-### 15. Cache Search Results
-- [ ] Cache recent search results locally
-- [ ] Configurable cache TTL
-- [ ] Offline browsing of cached results
+### ~~15. Cache Search Results~~ ✓
+- [x] Cache recent search results locally
+- [x] Configurable cache TTL
+- [x] Offline browsing of cached results
 
 ---
 
@@ -125,3 +125,10 @@ To work on an improvement:
 - [x] Configurable browser timeouts and polling intervals - v0.3.0
 - [x] Verbose browser logging for debugging - v0.3.0
 - [x] Fix database NULL error_message handling - v0.3.0
+- [x] MD5 checksum verification after download - v0.4.0
+- [x] Auto re-download corrupted files with --fix flag - v0.4.0
+- [x] Verification status display in list command - v0.4.0
+- [x] Search result caching with configurable TTL - v0.4.0
+- [x] Cache management commands (stats, clear, clean, enable/disable) - v0.4.0
+- [x] Shell completions for bash, zsh, fish, and powershell - v0.4.0
+- [x] Dynamic completion for download IDs - v0.4.0

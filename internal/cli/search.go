@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/anna"
+	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/tui"
 )
@@ -105,9 +107,46 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		searchLimit = 20
 	}
 
-	books, err := client.Search(ctx, query, searchLimit)
-	if err != nil {
-		return fmt.Errorf("search failed: %w", err)
+	var books []*anna.Book
+
+	// Try to get from cache if enabled
+	cfg := config.Get()
+	if cfg.Cache.Enabled {
+		filterMap := filters.toMap()
+		cacheKey := db.GenerateCacheKey(query, filterMap)
+
+		cached, err := db.GetCachedSearch(cacheKey)
+		if err == nil && cached != nil {
+			// Cache hit
+			if err := json.Unmarshal([]byte(cached.ResultsJSON), &books); err == nil {
+				Printf("Using cached results (%d found)\n", len(books))
+			} else {
+				// Cache corrupted, fetch fresh
+				books = nil
+			}
+		}
+
+		// Clean expired cache entries periodically
+		go db.CleanExpiredCache()
+	}
+
+	// If not in cache, fetch from API
+	if books == nil {
+		var err error
+		books, err = client.Search(ctx, query, searchLimit)
+		if err != nil {
+			return fmt.Errorf("search failed: %w", err)
+		}
+
+		// Save to cache if enabled
+		if cfg.Cache.Enabled {
+			filterMap := filters.toMap()
+			cacheKey := db.GenerateCacheKey(query, filterMap)
+			if resultsJSON, err := json.Marshal(books); err == nil {
+				filtersJSON, _ := json.Marshal(filterMap)
+				db.SaveCachedSearch(cacheKey, query, string(filtersJSON), string(resultsJSON), len(books), cfg.Cache.TTL)
+			}
+		}
 	}
 
 	// Apply all filters
@@ -269,6 +308,24 @@ func (f filterOptions) String() string {
 		parts = append(parts, fmt.Sprintf("max-size=%s", f.maxSize))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// toMap converts filter options to a map for caching
+func (f filterOptions) toMap() map[string]string {
+	m := make(map[string]string)
+	if f.format != "" {
+		m["format"] = f.format
+	}
+	if f.language != "" {
+		m["language"] = f.language
+	}
+	if f.year != "" {
+		m["year"] = f.year
+	}
+	if f.maxSize != "" {
+		m["max-size"] = f.maxSize
+	}
+	return m
 }
 
 // applyFilters applies all filters to the book list

@@ -134,6 +134,55 @@ bookdl resume all
 bookdl restart 1
 ```
 
+### Verify Downloads
+
+```bash
+# Verify a specific download
+bookdl verify 1
+
+# Verify all completed downloads
+bookdl verify --all
+
+# Verify and automatically re-download corrupted files
+bookdl verify --all --fix
+
+# Re-verify downloads that failed verification
+bookdl verify --failed
+```
+
+### Manage Cache
+
+```bash
+# View cache statistics
+bookdl cache stats
+
+# Clear all cached search results
+bookdl cache clear
+
+# Clean expired cache entries
+bookdl cache clean
+
+# Enable/disable caching
+bookdl cache enable
+bookdl cache disable
+```
+
+### Shell Completions
+
+```bash
+# Generate completions for your shell
+bookdl completion bash   # Bash
+bookdl completion zsh    # Zsh
+bookdl completion fish   # Fish
+bookdl completion powershell  # PowerShell
+
+# Install bash completions
+bookdl completion bash > /etc/bash_completion.d/bookdl
+
+# Install zsh completions
+bookdl completion zsh > "${fpath[1]}/_bookdl"
+```
+
 ### Configuration
 
 ```bash
@@ -167,6 +216,10 @@ browser:
   max_countdown_wait: 90s  # Max time to wait for download countdown
   poll_interval: 3s  # How often to check for download link
   verbose_logging: false  # Enable detailed browser logging
+
+cache:
+  enabled: true  # Enable search result caching
+  ttl: 24h  # Time-to-live for cached results
 ```
 
 Environment variables can override config values with the `BOOKDL_` prefix:

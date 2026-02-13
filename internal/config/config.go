@@ -16,6 +16,7 @@ type Config struct {
 	Files     FileConfig     `mapstructure:"files"`
 	Network   NetworkConfig  `mapstructure:"network"`
 	Browser   BrowserConfig  `mapstructure:"browser"`
+	Cache     CacheConfig    `mapstructure:"cache"`
 }
 
 // AnnaConfig holds Anna's Archive settings
@@ -60,6 +61,12 @@ type BrowserConfig struct {
 	VerboseLogging      bool          `mapstructure:"verbose_logging"`        // Enable detailed logging
 }
 
+// CacheConfig holds cache settings
+type CacheConfig struct {
+	Enabled bool          `mapstructure:"enabled"`  // Enable search result caching
+	TTL     time.Duration `mapstructure:"ttl"`      // Time-to-live for cached results
+}
+
 var cfg *Config
 
 // GetConfigDir returns the configuration directory path
@@ -102,6 +109,8 @@ func Init(cfgFile string) error {
 	viper.SetDefault("browser.max_countdown_wait", 90*time.Second)
 	viper.SetDefault("browser.poll_interval", 3*time.Second)
 	viper.SetDefault("browser.verbose_logging", false)
+	viper.SetDefault("cache.enabled", true)
+	viper.SetDefault("cache.ttl", 24*time.Hour)
 
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)

@@ -34,6 +34,7 @@ type Download struct {
 	Status         DownloadStatus
 	ErrorMessage   string
 	RetryCount     int
+	Verified       bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CompletedAt    *time.Time
@@ -79,11 +80,11 @@ func GetDownload(id int64) (*Download, error) {
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
-			temp_path, status, error_message, retry_count, created_at, updated_at, completed_at
+			temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
 		FROM downloads WHERE id = ?`, id).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -101,11 +102,11 @@ func GetDownloadByHash(hash string) (*Download, error) {
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
-			temp_path, status, error_message, retry_count, created_at, updated_at, completed_at
+			temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
 		FROM downloads WHERE md5_hash = ?`, hash).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -125,14 +126,14 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
 			FROM downloads WHERE status = ?
 			ORDER BY updated_at DESC`, status)
 	} else if showAll {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
 			FROM downloads
 			ORDER BY updated_at DESC`)
 	} else {
@@ -140,7 +141,7 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
 			FROM downloads WHERE status != 'completed'
 			ORDER BY updated_at DESC`)
 	}
@@ -156,7 +157,7 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		err := rows.Scan(
 			&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 			&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -203,6 +204,14 @@ func MarkCompleted(id int64, filePath string) error {
 			completed_at = CURRENT_TIMESTAMP,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`, filePath, id)
+	return err
+}
+
+// MarkVerified marks a download as verified
+func MarkVerified(id int64, verified bool) error {
+	_, err := database.Exec(`
+		UPDATE downloads SET verified = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`, verified, id)
 	return err
 }
 

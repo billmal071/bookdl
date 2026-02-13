@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS downloads (
     status          TEXT DEFAULT 'pending',
     error_message   TEXT,
     retry_count     INTEGER DEFAULT 0,
+    verified        INTEGER DEFAULT 0,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at    DATETIME
@@ -78,6 +79,20 @@ CREATE TABLE IF NOT EXISTS search_history (
 
 CREATE INDEX IF NOT EXISTS idx_search_history_query ON search_history(query);
 CREATE INDEX IF NOT EXISTS idx_search_history_created ON search_history(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS search_cache (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cache_key       TEXT UNIQUE NOT NULL,
+    query           TEXT NOT NULL,
+    filters         TEXT,
+    results_json    TEXT NOT NULL,
+    result_count    INTEGER DEFAULT 0,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at      DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_cache_key ON search_cache(cache_key);
+CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at);
 `
 
 // Init initializes the database connection and schema

@@ -210,6 +210,16 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 			if err := db.MarkCompleted(download.ID, download.FilePath); err != nil {
 				return fmt.Errorf("failed to mark download complete: %w", err)
 			}
+
+			// Verify checksum
+			fmt.Println("Verifying checksum...")
+			if err := downloader.VerifyAndMark(download); err != nil {
+				fmt.Printf("⚠️  Warning: Checksum verification failed: %v\n", err)
+				fmt.Printf("   File may be corrupted. Consider re-downloading.\n")
+			} else {
+				fmt.Println("✓ Checksum verified")
+			}
+
 			Successf("Downloaded: %s", download.FilePath)
 			notify.DownloadComplete(download.Title)
 			return nil

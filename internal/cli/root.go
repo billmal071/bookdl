@@ -65,10 +65,13 @@ func init() {
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(pauseCmd)
 	rootCmd.AddCommand(restartCmd)
+	rootCmd.AddCommand(verifyCmd)
 	rootCmd.AddCommand(bookmarkCmd)
 	rootCmd.AddCommand(bookmarksCmd)
 	rootCmd.AddCommand(historyCmd)
+	rootCmd.AddCommand(cacheCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(completionCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

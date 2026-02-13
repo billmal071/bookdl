@@ -100,6 +100,13 @@ func printDownload(d *db.Download) {
 	if d.ErrorMessage != "" {
 		fmt.Printf(" - %s", d.ErrorMessage)
 	}
+	if d.Status == db.StatusCompleted {
+		if d.Verified {
+			fmt.Printf(" (✓ verified)")
+		} else {
+			fmt.Printf(" (⚠️  not verified)")
+		}
+	}
 	fmt.Println()
 
 	// File info
