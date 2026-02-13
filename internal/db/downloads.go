@@ -35,6 +35,7 @@ type Download struct {
 	ErrorMessage   string
 	RetryCount     int
 	Verified       bool
+	Priority       int
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CompletedAt    *time.Time
@@ -80,11 +81,11 @@ func GetDownload(id int64) (*Download, error) {
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
-			temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
+			temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 		FROM downloads WHERE id = ?`, id).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -102,11 +103,11 @@ func GetDownloadByHash(hash string) (*Download, error) {
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
 			file_size, downloaded_size, source_url, download_url, file_path,
-			temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
+			temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 		FROM downloads WHERE md5_hash = ?`, hash).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -123,17 +124,23 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 	var err error
 
 	if status != "" {
+		// For pending downloads, order by priority (DESC) then created_at
+		// For other statuses, order by updated_at
+		orderClause := "ORDER BY updated_at DESC"
+		if status == StatusPending {
+			orderClause = "ORDER BY priority DESC, created_at ASC"
+		}
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads WHERE status = ?
-			ORDER BY updated_at DESC`, status)
+			`+orderClause, status)
 	} else if showAll {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads
 			ORDER BY updated_at DESC`)
 	} else {
@@ -141,7 +148,7 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
 				file_size, downloaded_size, source_url, download_url, file_path,
-				temp_path, status, error_message, retry_count, verified, created_at, updated_at, completed_at
+				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads WHERE status != 'completed'
 			ORDER BY updated_at DESC`)
 	}
@@ -157,7 +164,7 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		err := rows.Scan(
 			&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
 			&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
-			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
+			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -363,4 +370,34 @@ func GetIncompleteChunks(downloadID int64) ([]*Chunk, error) {
 		chunks = append(chunks, c)
 	}
 	return chunks, rows.Err()
+}
+
+// UpdatePriority updates the priority of a download
+func UpdatePriority(id int64, priority int) error {
+	_, err := database.Exec(`
+		UPDATE downloads SET priority = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`, priority, id)
+	return err
+}
+
+// SetPriorityTop sets a download to the highest priority
+func SetPriorityTop(id int64) error {
+	// Get the current max priority
+	var maxPriority int
+	err := database.QueryRow(`SELECT COALESCE(MAX(priority), 0) FROM downloads WHERE status = 'pending'`).Scan(&maxPriority)
+	if err != nil {
+		return err
+	}
+	return UpdatePriority(id, maxPriority+1)
+}
+
+// SetPriorityBottom sets a download to the lowest priority
+func SetPriorityBottom(id int64) error {
+	// Get the current min priority
+	var minPriority int
+	err := database.QueryRow(`SELECT COALESCE(MIN(priority), 0) FROM downloads WHERE status = 'pending'`).Scan(&minPriority)
+	if err != nil {
+		return err
+	}
+	return UpdatePriority(id, minPriority-1)
 }

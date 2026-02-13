@@ -50,10 +50,24 @@ Examples:
 	RunE: runQueueRemove,
 }
 
+var queuePriorityCmd = &cobra.Command{
+	Use:   "priority [id] [top|bottom|value]",
+	Short: "Change priority of a queue item",
+	Long: `Change the priority of a specific queue item.
+
+Examples:
+  bookdl queue priority 1 top       Move item #1 to top of queue
+  bookdl queue priority 1 bottom    Move item #1 to bottom of queue
+  bookdl queue priority 1 10        Set item #1 priority to 10`,
+	Args: cobra.ExactArgs(2),
+	RunE: runQueuePriority,
+}
+
 func init() {
 	queueCmd.AddCommand(queueListCmd)
 	queueCmd.AddCommand(queueClearCmd)
 	queueCmd.AddCommand(queueRemoveCmd)
+	queueCmd.AddCommand(queuePriorityCmd)
 }
 
 func runQueueList(cmd *cobra.Command, args []string) error {
@@ -76,7 +90,13 @@ func runQueueList(cmd *cobra.Command, args []string) error {
 			title = title[:47] + "..."
 		}
 
-		fmt.Printf("  %d. [%d] %s\n", i+1, d.ID, title)
+		// Show priority indicator if non-zero
+		priorityStr := ""
+		if d.Priority != 0 {
+			priorityStr = fmt.Sprintf(" [Priority: %d]", d.Priority)
+		}
+
+		fmt.Printf("  %d. [%d]%s %s\n", i+1, d.ID, priorityStr, title)
 
 		var details []string
 		if d.Format != "" {
@@ -99,6 +119,7 @@ func runQueueList(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Println("Run 'bookdl resume all' to start downloading.")
+	fmt.Println("Use 'bookdl queue priority <id> top|bottom' to reorder.")
 	return nil
 }
 
@@ -159,5 +180,50 @@ func runQueueRemove(cmd *cobra.Command, args []string) error {
 	if removed > 0 {
 		Successf("Removed %d item(s) from the queue.", removed)
 	}
+	return nil
+}
+
+func runQueuePriority(cmd *cobra.Command, args []string) error {
+	// Parse download ID
+	var id int64
+	if _, err := fmt.Sscanf(args[0], "%d", &id); err != nil {
+		return fmt.Errorf("invalid ID: %s", args[0])
+	}
+
+	// Get the download to verify it's pending
+	download, err := db.GetDownload(id)
+	if err != nil {
+		return fmt.Errorf("download #%d not found", id)
+	}
+
+	if download.Status != db.StatusPending {
+		return fmt.Errorf("download #%d is not in queue (status: %s)", id, download.Status)
+	}
+
+	action := strings.ToLower(args[1])
+
+	switch action {
+	case "top":
+		if err := db.SetPriorityTop(id); err != nil {
+			return fmt.Errorf("failed to set priority: %w", err)
+		}
+		Successf("Moved %s to top of queue.", download.Title)
+	case "bottom":
+		if err := db.SetPriorityBottom(id); err != nil {
+			return fmt.Errorf("failed to set priority: %w", err)
+		}
+		Successf("Moved %s to bottom of queue.", download.Title)
+	default:
+		// Try to parse as numeric priority
+		var priority int
+		if _, err := fmt.Sscanf(action, "%d", &priority); err != nil {
+			return fmt.Errorf("invalid priority value: %s (use 'top', 'bottom', or a number)", action)
+		}
+		if err := db.UpdatePriority(id, priority); err != nil {
+			return fmt.Errorf("failed to set priority: %w", err)
+		}
+		Successf("Set priority of %s to %d.", download.Title, priority)
+	}
+
 	return nil
 }

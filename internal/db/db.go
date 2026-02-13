@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS downloads (
     error_message   TEXT,
     retry_count     INTEGER DEFAULT 0,
     verified        INTEGER DEFAULT 0,
+    priority        INTEGER DEFAULT 0,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at    DATETIME
@@ -120,6 +121,51 @@ func Init() error {
 	}
 
 	database = db
+
+	// Run migrations
+	if err := runMigrations(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// runMigrations applies database migrations
+func runMigrations(db *sql.DB) error {
+	// Migration 1: Add verified column if it doesn't exist
+	var verifiedCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('downloads') WHERE name='verified'").Scan(&verifiedCount)
+	if err != nil {
+		return err
+	}
+
+	if verifiedCount == 0 {
+		_, err := db.Exec("ALTER TABLE downloads ADD COLUMN verified INTEGER DEFAULT 0")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Migration 2: Add priority column if it doesn't exist
+	var priorityCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('downloads') WHERE name='priority'").Scan(&priorityCount)
+	if err != nil {
+		return err
+	}
+
+	if priorityCount == 0 {
+		// Add priority column to existing databases
+		_, err := db.Exec("ALTER TABLE downloads ADD COLUMN priority INTEGER DEFAULT 0")
+		if err != nil {
+			return err
+		}
+		// Create index
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_downloads_priority ON downloads(priority DESC)")
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

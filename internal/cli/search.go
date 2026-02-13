@@ -64,7 +64,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	// Show search history if requested
 	if showHistory {
-		return showSearchHistory()
+		return showSearchHistoryInteractive(cmd, args)
 	}
 
 	// Require query if not showing history
@@ -509,7 +509,195 @@ func saveSearchHistory(query string, resultCount int, filters filterOptions) {
 	db.AddSearchHistory(query, resultCount, dbFilters)
 }
 
-// showSearchHistory displays recent search history
+// showSearchHistoryInteractive displays recent search history with interactive selection
+func showSearchHistoryInteractive(cmd *cobra.Command, args []string) error {
+	history, err := db.GetUniqueSearchHistory(20)
+	if err != nil {
+		return fmt.Errorf("failed to get search history: %w", err)
+	}
+
+	if len(history) == 0 {
+		fmt.Println("No search history.")
+		fmt.Println("\nSearches are saved automatically when you search for books.")
+		return nil
+	}
+
+	// Use interactive selector
+	selected, err := tui.RunHistorySelector(history)
+	if err != nil {
+		return fmt.Errorf("history selection failed: %w", err)
+	}
+
+	if selected == nil {
+		return nil // User cancelled
+	}
+
+	fmt.Println()
+
+	// Re-run the search with the selected query and filters
+	Printf("Running search: %s\n", selected.Query)
+
+	// Reconstruct the filter options from the selected history
+	filters := filterOptions{
+		format:   selected.Filters.Format,
+		language: selected.Filters.Language,
+		year:     selected.Filters.Year,
+		maxSize:  selected.Filters.MaxSize,
+	}
+
+	if filters.hasAny() {
+		Printf("Filters: %s\n", filters.String())
+	}
+
+	// Get flags from the command
+	limit, _ := cmd.Flags().GetInt("limit")
+	autoDownload, _ := cmd.Flags().GetBool("download")
+	queueMode, _ := cmd.Flags().GetBool("queue")
+
+	// Create client and search
+	client := anna.NewClient()
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+	defer cancel()
+
+	// Get extra results for filtering
+	searchLimit := limit * 3
+	if filters.hasAny() {
+		searchLimit = limit * 5
+	}
+	if searchLimit < 20 {
+		searchLimit = 20
+	}
+
+	var books []*anna.Book
+
+	// Try to get from cache if enabled
+	cfg := config.Get()
+	if cfg.Cache.Enabled {
+		filterMap := filters.toMap()
+		cacheKey := db.GenerateCacheKey(selected.Query, filterMap)
+
+		cached, err := db.GetCachedSearch(cacheKey)
+		if err == nil && cached != nil {
+			if err := json.Unmarshal([]byte(cached.ResultsJSON), &books); err == nil {
+				Printf("Using cached results (%d found)\n", len(books))
+			} else {
+				books = nil
+			}
+		}
+
+		go db.CleanExpiredCache()
+	}
+
+	// If not in cache, fetch from API
+	if books == nil {
+		books, err = client.Search(ctx, selected.Query, searchLimit)
+		if err != nil {
+			return fmt.Errorf("search failed: %w", err)
+		}
+
+		// Save to cache if enabled
+		if cfg.Cache.Enabled {
+			filterMap := filters.toMap()
+			cacheKey := db.GenerateCacheKey(selected.Query, filterMap)
+			if resultsJSON, err := json.Marshal(books); err == nil {
+				filtersJSON, _ := json.Marshal(filterMap)
+				db.SaveCachedSearch(cacheKey, selected.Query, string(filtersJSON), string(resultsJSON), len(books), cfg.Cache.TTL)
+			}
+		}
+	}
+
+	// Apply all filters
+	books = applyFilters(books, filters)
+
+	// Limit results
+	if len(books) > limit {
+		books = books[:limit]
+	}
+
+	if len(books) == 0 {
+		fmt.Println("No books found matching your query.")
+		return nil
+	}
+
+	Printf("Found %d result(s)\n\n", len(books))
+
+	// Create load more function for pagination
+	currentPage := 1
+	loadMore := func() ([]*anna.Book, error) {
+		currentPage++
+		newCtx, newCancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+		defer newCancel()
+
+		moreBooks, err := client.SearchPage(newCtx, selected.Query, searchLimit, currentPage)
+		if err != nil {
+			return nil, err
+		}
+
+		moreBooks = applyFilters(moreBooks, filters)
+
+		if len(moreBooks) > limit {
+			moreBooks = moreBooks[:limit]
+		}
+
+		return moreBooks, nil
+	}
+
+	// Queue mode: multi-select
+	if queueMode {
+		selectedBooks, err := tui.RunMultiSelector(books, loadMore)
+		if err != nil {
+			return fmt.Errorf("selection failed: %w", err)
+		}
+
+		if len(selectedBooks) == 0 {
+			return nil
+		}
+
+		fmt.Println()
+
+		added := 0
+		for _, book := range selectedBooks {
+			if err := addToQueue(book); err != nil {
+				Errorf("failed to queue %s: %v", book.Title, err)
+			} else {
+				added++
+				fmt.Printf("Queued: %s\n", book.Title)
+			}
+		}
+
+		if added > 0 {
+			Successf("Added %d book(s) to the download queue.", added)
+			fmt.Println("Run 'bookdl queue' to view the queue or 'bookdl resume all' to start downloading.")
+		}
+		return nil
+	}
+
+	// Interactive selection with load more support (single select)
+	selectedBook, err := tui.RunSelectorWithLoadMore(books, loadMore)
+	if err != nil {
+		return fmt.Errorf("selection failed: %w", err)
+	}
+
+	if selectedBook == nil {
+		return nil
+	}
+
+	fmt.Println()
+
+	if autoDownload {
+		return startBookDownload(cmd.Context(), selectedBook)
+	}
+
+	fmt.Printf("Selected: %s\n", selectedBook.Title)
+	fmt.Printf("MD5: %s\n", selectedBook.MD5Hash)
+	fmt.Printf("\nTo download, run:\n")
+	fmt.Printf("  bookdl download %s\n", selectedBook.MD5Hash)
+
+	return nil
+}
+
+// showSearchHistory displays recent search history (non-interactive)
 func showSearchHistory() error {
 	history, err := db.GetUniqueSearchHistory(20)
 	if err != nil {

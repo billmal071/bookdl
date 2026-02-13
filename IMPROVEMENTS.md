@@ -20,7 +20,7 @@ This document tracks potential improvements and features for bookdl. Items are o
 ### ~~3. Download Queue~~ ✓
 - [x] Select multiple books from search results (space to toggle, enter to confirm)
 - [x] Queue management commands (`bookdl queue`, `bookdl queue clear`, `bookdl queue remove`)
-- [ ] Priority ordering in queue - deferred
+- [x] Priority ordering in queue (`bookdl queue priority <id> top|bottom|value`)
 
 ### ~~4. Concurrent Downloads~~ ✓
 - [x] Download multiple books simultaneously
@@ -38,7 +38,8 @@ This document tracks potential improvements and features for bookdl. Items are o
 ### ~~6. Search History~~ ✓
 - [x] Store recent searches in database
 - [x] Access with `bookdl search --history` or `bookdl history`
-- [ ] Arrow up/down in search to cycle through history (deferred - requires TUI changes)
+- [x] Arrow up/down navigation with interactive search history selector
+- [x] Filter search history with '/' key
 - [x] Clear history command: `bookdl history clear`
 
 ### ~~7. Better Progress Display~~ ✓
@@ -86,9 +87,10 @@ This document tracks potential improvements and features for bookdl. Items are o
 
 ### ~~14. Notifications~~ ✓
 - [x] Desktop notifications on download complete (optional)
-- [ ] Sound notification option (deferred)
-- [x] macOS/Linux/Windows support
+- [x] Sound notification option (`bookdl config sound on/off`)
+- [x] macOS/Linux/Windows support for both visual and audio
 - [x] Enable/disable via: `bookdl config notify on/off`
+- [x] Separate sound control: `bookdl config sound on/off`
 
 ### ~~15. Cache Search Results~~ ✓
 - [x] Cache recent search results locally
