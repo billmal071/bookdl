@@ -1,8 +1,8 @@
-package anna
+package liber3
 
 import "context"
 
-// Book represents a book from Anna's Archive
+// Book represents a book from Liber3
 type Book struct {
 	MD5Hash   string `json:"md5"`
 	Title     string `json:"title"`
@@ -14,7 +14,7 @@ type Book struct {
 	Size      string `json:"size"`
 	SizeBytes int64  `json:"size_bytes"`
 	PageURL   string `json:"page_url"`
-	Source    string `json:"source"` // "anna" or "zlibrary"
+	Source    string `json:"source"` // "liber3"
 }
 
 // SearchResult contains search results with metadata
@@ -26,13 +26,13 @@ type SearchResult struct {
 
 // DownloadInfo contains information needed to download a book
 type DownloadInfo struct {
-	DirectURL  string `json:"direct_url"`
+	DirectURL  string   `json:"direct_url"`
 	MirrorURLs []string `json:"mirror_urls"`
-	Filename   string `json:"filename"`
-	FileSize   int64  `json:"file_size"`
+	Filename   string   `json:"filename"`
+	FileSize   int64    `json:"file_size"`
 }
 
-// Client defines the interface for Anna's Archive access
+// Client defines the interface for Liber3 access
 type Client interface {
 	// Search searches for books matching the query
 	Search(ctx context.Context, query string, limit int) ([]*Book, error)

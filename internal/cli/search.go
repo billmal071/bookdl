@@ -13,6 +13,7 @@ import (
 	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/search"
 	"github.com/billmal071/bookdl/internal/tui"
 )
 
@@ -57,6 +58,7 @@ func init() {
 	searchCmd.Flags().BoolP("queue", "q", false, "multi-select mode: add multiple books to download queue")
 	searchCmd.Flags().Bool("no-interactive", false, "disable interactive mode, just print results")
 	searchCmd.Flags().Bool("history", false, "show search history")
+	searchCmd.Flags().String("source", "all", "search source: all, anna, zlibrary, or liber3 (default: all)")
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
@@ -77,6 +79,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	autoDownload, _ := cmd.Flags().GetBool("download")
 	queueMode, _ := cmd.Flags().GetBool("queue")
 	noInteractive, _ := cmd.Flags().GetBool("no-interactive")
+	sourceOpt, _ := cmd.Flags().GetString("source")
 
 	// Collect filter options
 	filters := filterOptions{
@@ -86,20 +89,41 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		maxSize:  getString(cmd, "max-size"),
 	}
 
+		// Parse source option
+		var searchOpt search.Option
+		switch sourceOpt {
+		case "anna":
+			searchOpt = search.OptionAnna
+			Printf("Searching Anna's Archive only\n")
+		case "zlibrary":
+			searchOpt = search.OptionZLibrary
+			Printf("Searching Z-Library only\n")
+		case "liber3":
+			searchOpt = search.OptionLiber3
+			Printf("Searching Liber3 only\n")
+		default:
+			searchOpt = search.OptionAll
+			Printf("Searching all sources\n")
+		}
+
 	// Show search info with active filters
 	Printf("Searching for: %s\n", query)
 	if filters.hasAny() {
 		Printf("Filters: %s\n", filters.String())
 	}
 
-	// Create client and search
-	client := anna.NewClient()
+	// Create searcher and search
+	searcher := search.NewSearcher(searchOpt)
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
 	defer cancel()
 
 	// Get extra results for filtering (more if filters are active)
+	// When searching all sources, get more results to show from each source
 	searchLimit := limit * 3
+	if searchOpt == search.OptionAll {
+		searchLimit = limit * 5 // Get more results when searching all sources
+	}
 	if filters.hasAny() {
 		searchLimit = limit * 5 // Get more results when filtering
 	}
@@ -109,9 +133,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	var books []*anna.Book
 
-	// Try to get from cache if enabled
+	// Try to get from cache if enabled (only for single source searches)
 	cfg := config.Get()
-	if cfg.Cache.Enabled {
+	if cfg.Cache.Enabled && searchOpt != search.OptionAll {
 		filterMap := filters.toMap()
 		cacheKey := db.GenerateCacheKey(query, filterMap)
 
@@ -130,10 +154,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		go db.CleanExpiredCache()
 	}
 
-	// If not in cache, fetch from API
+	// If not in cache, fetch from searcher
 	if books == nil {
 		var err error
-		books, err = client.Search(ctx, query, searchLimit)
+		books, err = searcher.Search(ctx, query, searchLimit)
 		if err != nil {
 			return fmt.Errorf("search failed: %w", err)
 		}
@@ -152,9 +176,14 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Apply all filters
 	books = applyFilters(books, filters)
 
-	// Limit results
-	if len(books) > limit {
-		books = books[:limit]
+	// Limit results (but not when searching all sources - we want to show results from each source)
+	if searchOpt != search.OptionAll {
+		if len(books) > limit {
+			books = books[:limit]
+		}
+	} else {
+		// When searching all sources, limit per source instead of total
+		// This is handled in printBooks
 	}
 
 	if len(books) == 0 {
@@ -180,7 +209,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		newCtx, newCancel := context.WithTimeout(cmd.Context(), 60*time.Second)
 		defer newCancel()
 
-		moreBooks, err := client.SearchPage(newCtx, query, searchLimit, currentPage)
+		moreBooks, err := searcher.SearchPage(newCtx, query, searchLimit, currentPage)
 		if err != nil {
 			return nil, err
 		}
@@ -469,8 +498,47 @@ func parseSize(s string) int64 {
 	return int64(value * multipliers[unit])
 }
 
-// printBooks prints books in a simple format
+// printBooks prints books in a simple format, grouped by source
 func printBooks(books []*anna.Book) {
+	// Group books by source
+	annaBooks := make([]*anna.Book, 0)
+	zlibraryBooks := make([]*anna.Book, 0)
+	liber3Books := make([]*anna.Book, 0)
+
+	for _, book := range books {
+		if book.Source == "zlibrary" {
+			zlibraryBooks = append(zlibraryBooks, book)
+		} else if book.Source == "liber3" {
+			liber3Books = append(liber3Books, book)
+		} else {
+			annaBooks = append(annaBooks, book)
+		}
+	}
+
+	// Print Anna's Archive results first
+	if len(annaBooks) > 0 {
+		fmt.Println("📚 Anna's Archive:")
+		printBookList(annaBooks)
+		fmt.Println()
+	}
+
+	// Print Z-Library results
+	if len(zlibraryBooks) > 0 {
+		fmt.Println("📚 Z-Library:")
+		printBookList(zlibraryBooks)
+		fmt.Println()
+	}
+
+	// Print Liber3 results
+	if len(liber3Books) > 0 {
+		fmt.Println("📚 Liber3:")
+		printBookList(liber3Books)
+		fmt.Println()
+	}
+}
+
+// printBookList prints a list of books with their details
+func printBookList(books []*anna.Book) {
 	for i, book := range books {
 		fmt.Printf("%d. %s\n", i+1, book.Title)
 		if book.Authors != "" {
@@ -555,7 +623,7 @@ func showSearchHistoryInteractive(cmd *cobra.Command, args []string) error {
 	queueMode, _ := cmd.Flags().GetBool("queue")
 
 	// Create client and search
-	client := anna.NewClient()
+	searcher := search.NewSearcher(search.OptionAll)
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
 	defer cancel()
@@ -591,7 +659,7 @@ func showSearchHistoryInteractive(cmd *cobra.Command, args []string) error {
 
 	// If not in cache, fetch from API
 	if books == nil {
-		books, err = client.Search(ctx, selected.Query, searchLimit)
+		books, err = searcher.Search(ctx, selected.Query, searchLimit)
 		if err != nil {
 			return fmt.Errorf("search failed: %w", err)
 		}
@@ -629,7 +697,7 @@ func showSearchHistoryInteractive(cmd *cobra.Command, args []string) error {
 		newCtx, newCancel := context.WithTimeout(cmd.Context(), 60*time.Second)
 		defer newCancel()
 
-		moreBooks, err := client.SearchPage(newCtx, selected.Query, searchLimit, currentPage)
+		moreBooks, err := searcher.SearchPage(newCtx, selected.Query, searchLimit, currentPage)
 		if err != nil {
 			return nil, err
 		}

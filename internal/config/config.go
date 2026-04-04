@@ -12,6 +12,8 @@ import (
 // Config holds all application configuration
 type Config struct {
 	Anna      AnnaConfig     `mapstructure:"anna"`
+	ZLibrary  ZLibraryConfig `mapstructure:"zlibrary"`
+	Liber3    Liber3Config   `mapstructure:"liber3"`
 	Downloads DownloadConfig `mapstructure:"downloads"`
 	Files     FileConfig     `mapstructure:"files"`
 	Network   NetworkConfig  `mapstructure:"network"`
@@ -21,6 +23,18 @@ type Config struct {
 
 // AnnaConfig holds Anna's Archive settings
 type AnnaConfig struct {
+	APIKey  string `mapstructure:"api_key"`
+	BaseURL string `mapstructure:"base_url"`
+}
+
+// ZLibraryConfig holds Z-Library settings
+type ZLibraryConfig struct {
+	APIKey  string `mapstructure:"api_key"`
+	BaseURL string `mapstructure:"base_url"`
+}
+
+// Liber3Config holds Liber3 settings
+type Liber3Config struct {
 	APIKey  string `mapstructure:"api_key"`
 	BaseURL string `mapstructure:"base_url"`
 }
@@ -90,6 +104,8 @@ func GetConfigPath() string {
 func Init(cfgFile string) error {
 	// Set defaults
 	viper.SetDefault("anna.base_url", "annas-archive.li")
+	viper.SetDefault("zlibrary.base_url", "z-library.sk")
+	viper.SetDefault("liber3.base_url", "liber3.eth.limo")
 	viper.SetDefault("downloads.path", "~/Downloads/books")
 	viper.SetDefault("downloads.chunk_size", 5*1024*1024) // 5MB
 	viper.SetDefault("downloads.max_concurrent", 2)
