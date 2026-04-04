@@ -176,14 +176,14 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Apply all filters
 	books = applyFilters(books, filters)
 
-	// Limit results (but not when searching all sources - we want to show results from each source)
+	// Limit results
 	if searchOpt != search.OptionAll {
 		if len(books) > limit {
 			books = books[:limit]
 		}
 	} else {
-		// When searching all sources, limit per source instead of total
-		// This is handled in printBooks
+		// When searching all sources, limit per source
+		books = limitPerSource(books, limit)
 	}
 
 	if len(books) == 0 {
@@ -496,6 +496,23 @@ func parseSize(s string) int64 {
 	}
 
 	return int64(value * multipliers[unit])
+}
+
+// limitPerSource caps results to limit per source
+func limitPerSource(books []*anna.Book, limit int) []*anna.Book {
+	counts := make(map[string]int)
+	var result []*anna.Book
+	for _, book := range books {
+		src := book.Source
+		if src == "" {
+			src = "anna"
+		}
+		if counts[src] < limit {
+			result = append(result, book)
+			counts[src]++
+		}
+	}
+	return result
 }
 
 // printBooks prints books in a simple format, grouped by source
