@@ -307,13 +307,7 @@ bookdl/
 
 ## Contributing
 
-Contributions are welcome! See [IMPROVEMENTS.md](IMPROVEMENTS.md) for planned features and ideas.
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Run tests: `make test`
-5. Submit a pull request
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, and [IMPROVEMENTS.md](IMPROVEMENTS.md) for planned features and ideas.
 
 ## License
 
