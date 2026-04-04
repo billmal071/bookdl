@@ -22,5 +22,5 @@ func GetBaseURL() string {
 	if cfg.Anna.BaseURL != "" {
 		return cfg.Anna.BaseURL
 	}
-	return "annas-archive.li"
+	return "annas-archive.gl"
 }

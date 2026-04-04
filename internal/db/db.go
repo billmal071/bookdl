@@ -110,8 +110,29 @@ func Init() error {
 		return err
 	}
 
+	// Configure connection pool for SQLite
+	// SQLite works best with a single connection since it has a single write lock
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	// Enable foreign keys
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+
+	// Configure SQLite for better concurrency and performance
+	// busy_timeout: Wait up to 10 seconds before returning SQLITE_BUSY
+	if _, err := db.Exec("PRAGMA busy_timeout = 10000"); err != nil {
+		return err
+	}
+
+	// journal_mode = WAL: Write-Ahead Logging enables better concurrent reads/writes
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return err
+	}
+
+	// synchronous = NORMAL: Faster writes while maintaining safety in WAL mode
+	if _, err := db.Exec("PRAGMA synchronous = NORMAL"); err != nil {
 		return err
 	}
 

@@ -2,11 +2,11 @@ package zlibrary
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -124,106 +124,132 @@ func (c *BrowserClient) Search(ctx context.Context, query string, limit int) ([]
 	return c.SearchPage(ctx, query, limit, 1)
 }
 
-// SearchPage searches for books with pagination using a headless browser
+// jsBookData represents book data extracted via JavaScript from Z-Library's
+// <z-bookcard> custom elements. All metadata lives in element attributes and
+// slotted children (not in shadow DOM internals).
+type jsBookData struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Author   string `json:"author"`
+	Year     string `json:"year"`
+	Language string `json:"language"`
+	Format   string `json:"format"`
+	Size     string `json:"size"`
+	PageURL  string `json:"pageUrl"`
+	Download string `json:"download"`
+}
+
+// extractBooksJS is the JavaScript executed inside the browser to pull book data
+// from Z-Library's <z-bookcard> custom elements. The data is stored in element
+// attributes (id, href, language, year, extension, filesize) and slotted divs
+// (slot="title", slot="author").
+const extractBooksJS = `
+(function() {
+	var cards = document.querySelectorAll('z-bookcard');
+	if (cards.length === 0) return [];
+
+	return Array.from(cards).map(function(card) {
+		var titleEl = card.querySelector('[slot="title"]');
+		var authorEl = card.querySelector('[slot="author"]');
+		return {
+			id: card.getAttribute('id') || '',
+			title: titleEl ? titleEl.textContent.trim() : '',
+			author: authorEl ? authorEl.textContent.trim() : '',
+			year: card.getAttribute('year') || '',
+			language: card.getAttribute('language') || '',
+			format: card.getAttribute('extension') || '',
+			size: card.getAttribute('filesize') || '',
+			pageUrl: card.getAttribute('href') || '',
+			download: card.getAttribute('download') || ''
+		};
+	}).filter(function(b) { return b.id && b.title; });
+})()
+`
+
+// SearchPage searches for books with pagination using a headless browser.
+// Z-Library renders search results via <z-bookcard> custom elements whose
+// metadata is stored in HTML attributes and slotted children. We extract
+// the data with JavaScript after the page has rendered.
 func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int, page int) ([]*Book, error) {
-	// Get a browser context from the shared pool
 	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get browser context: %w", err)
 	}
 	defer cancel()
 
-	// Set longer timeout for Z-Library anti-bot protection
-	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 180*time.Second)
+	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 90*time.Second)
 	defer timeoutCancel()
 
-	// Build search URL with pagination - use Z-Library's actual format
-	searchURL := fmt.Sprintf("https://%s/s/%s", c.baseURL, url.QueryEscape(query))
+	// Use PathEscape (not QueryEscape) because the query is in the URL path segment,
+	// not in a query parameter. QueryEscape encodes spaces as '+' which Z-Library
+	// does not interpret correctly in /s/<query> paths.
+	searchURL := fmt.Sprintf("https://%s/s/%s", c.baseURL, url.PathEscape(query))
 	if page > 1 {
 		searchURL = fmt.Sprintf("%s?page=%d", searchURL, page)
 	}
 
-	var htmlContent string
-	var jsResult any
-
-	// Navigate and wait for anti-bot challenge to complete
+	// Navigate and wait for initial page load
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(searchURL),
-		// Wait for the page to load
-		chromedp.Sleep(5*time.Second),
-		// Wait for body to be present
+		chromedp.Sleep(3*time.Second),
 		chromedp.WaitVisible(`body`, chromedp.ByQuery),
-		// Wait for the data to load - Z-Library uses client-side rendering
-		chromedp.Sleep(15*time.Second),
-		// Try to execute JavaScript to get the book data
-		chromedp.Evaluate(`
-			(function() {
-				// Try to get book data from the z-booklist component
-				const booklist = document.querySelector('z-booklist');
-				if (!booklist) {
-					return {error: 'z-booklist not found'};
-				}
-				if (!booklist.shadowRoot) {
-					return {error: 'shadowRoot not found', hasBooklist: true};
-				}
-				const items = booklist.shadowRoot.querySelectorAll('[data-id]');
-				if (items.length === 0) {
-					return {error: 'no items found', hasShadowRoot: true};
-				}
-				return Array.from(items).map(item => ({
-					id: item.getAttribute('data-id'),
-					title: item.querySelector('.title')?.textContent || '',
-					author: item.querySelector('.author')?.textContent || ''
-				}));
-			})()
-		`, &jsResult),
-		// Get the HTML content as well
-		chromedp.OuterHTML("html", &htmlContent),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("browser navigation failed: %w", err)
 	}
 
-	// Just get the HTML content regardless of selectors
-	// Z-Library might have different HTML structure
-	err = chromedp.Run(browserCtx,
-		chromedp.OuterHTML("html", &htmlContent),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get page content: %w", err)
-	}
+	// Poll for z-bookcard elements to appear in the DOM.
+	var jsResultRaw any
+	pollInterval := 2 * time.Second
+	maxAttempts := 15
 
-	// Debug: save HTML to file for inspection
-	if len(htmlContent) > 0 {
-		fmt.Printf("[DEBUG] Got %d bytes of HTML from Z-Library\n", len(htmlContent))
-		if len(htmlContent) < 500 {
-			fmt.Printf("[DEBUG] HTML preview: %s\n", htmlContent[:500])
-		} else {
-			fmt.Printf("[DEBUG] HTML preview: %s\n", htmlContent[:500])
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		select {
+		case <-browserCtx.Done():
+			return nil, fmt.Errorf("browser timeout waiting for results")
+		default:
 		}
-		// Save full HTML for debugging
-		os.WriteFile("/tmp/zlibrary_debug.html", []byte(htmlContent), 0644)
+
+		err = chromedp.Run(browserCtx,
+			chromedp.Evaluate(extractBooksJS, &jsResultRaw),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate JavaScript: %w", err)
+		}
+
+		if arr, ok := jsResultRaw.([]any); ok && len(arr) > 0 {
+			break
+		}
+
+		// Check for Cloudflare challenge
+		var pageTitle string
+		_ = chromedp.Run(browserCtx, chromedp.Title(&pageTitle))
+		if strings.Contains(pageTitle, "Just a moment") {
+			err = chromedp.Run(browserCtx, chromedp.Sleep(5*time.Second))
+			if err != nil {
+				return nil, fmt.Errorf("polling interrupted: %w", err)
+			}
+			continue
+		}
+
+		err = chromedp.Run(browserCtx, chromedp.Sleep(pollInterval))
+		if err != nil {
+			return nil, fmt.Errorf("polling interrupted: %w", err)
+		}
 	}
 
-	// Debug: check JavaScript result
-	if jsResult != nil {
-		fmt.Printf("[DEBUG] JavaScript result: %v\n", jsResult)
-	} else {
-		fmt.Printf("[DEBUG] JavaScript result is nil\n")
+	books, err := jsResultToBooks(jsResultRaw, limit, c.baseURL)
+	if err != nil {
+		// Fallback: parse outer HTML in case Z-Library changed its rendering
+		var htmlContent string
+		_ = chromedp.Run(browserCtx, chromedp.OuterHTML("html", &htmlContent))
+		if htmlContent != "" {
+			return parseSearchResultsHTML(htmlContent, limit, c.baseURL)
+		}
+		return nil, err
 	}
 
-	// Debug: check for Cloudflare or anti-bot indicators
-	if strings.Contains(htmlContent, "cf-browser-verification") ||
-		strings.Contains(htmlContent, "Just a moment...") ||
-		strings.Contains(htmlContent, "_cf_chl") {
-		fmt.Printf("[DEBUG] Cloudflare detected in HTML\n")
-	}
-	if strings.Contains(htmlContent, "Please wait") ||
-		strings.Contains(htmlContent, "Checking your browser") {
-		fmt.Printf("[DEBUG] Anti-bot challenge detected\n")
-	}
-
-	return parseSearchResultsHTML(htmlContent, limit, c.baseURL)
+	return books, nil
 }
 
 // GetDownloadInfo retrieves download links using a headless browser
@@ -313,95 +339,71 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, downloadPageURL 
 	return downloadURL, nil
 }
 
-// parseSearchResultsHTML parses search results from HTML content
-func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, error) {
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+// bookIDRegexp returns a compiled regexp for extracting book IDs from Z-Library URLs.
+var bookIDRegexp = func() func() *regexp.Regexp {
+	re := regexp.MustCompile(`/book/(\d+)`)
+	return func() *regexp.Regexp { return re }
+}()
+
+// jsResultToBooks converts the raw JavaScript evaluation result into Book structs.
+func jsResultToBooks(raw any, limit int, baseURL string) ([]*Book, error) {
+	jsonBytes, err := json.Marshal(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal JS result: %w", err)
 	}
 
+	var jsBooks []jsBookData
+	if err := json.Unmarshal(jsonBytes, &jsBooks); err != nil {
+		return nil, fmt.Errorf("failed to parse JS book data: %w", err)
+	}
+
+	if len(jsBooks) == 0 {
+		return nil, ErrNoResults
+	}
+
+	seen := make(map[string]bool)
 	var books []*Book
-	var seenMD5 = make(map[string]bool)
 
-	fmt.Printf("[DEBUG] Starting to parse Z-Library HTML for books...\n")
-
-	// Look for book items - use very generic selectors first
-	// Z-Library might use different HTML structure
-	selectors := []string{
-		".book-item",
-		".book-card",
-		".resItem",
-		"[class*='book']",
-		".item",
-		".result",
-		"article",
-		".search-result",
-	}
-
-	for _, selector := range selectors {
-		matches := doc.Find(selector)
-		fmt.Printf("[DEBUG] Selector '%s' found %d elements\n", selector, matches.Length())
-		matches.Each(func(i int, s *goquery.Selection) {
-			if len(books) >= limit {
-				return
-			}
-
-			book := parseBookElementZ(s, baseURL)
-			if book != nil && book.MD5Hash != "" && !seenMD5[book.MD5Hash] {
-				seenMD5[book.MD5Hash] = true
-				books = append(books, book)
-				fmt.Printf("[DEBUG] Added book: %s (MD5: %s)\n", book.Title, book.MD5Hash)
-			}
-		})
-
-		if len(books) > 0 {
-			break // Found results with this selector
+	for _, jb := range jsBooks {
+		if len(books) >= limit {
+			break
 		}
-	}
 
-	// If still no results, try to find any links that look like book pages
-	if len(books) == 0 {
-		// Look for any links that might be book pages
-		doc.Find("a").Each(func(i int, s *goquery.Selection) {
-			if len(books) >= limit {
-				return
-			}
+		id := strings.TrimSpace(jb.ID)
+		if id == "" {
+			continue
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 
-			href, exists := s.Attr("href")
-			if !exists || href == "" {
-				return
-			}
+		pageURL := strings.TrimSpace(jb.PageURL)
+		if pageURL != "" && !strings.HasPrefix(pageURL, "http") {
+			pageURL = fmt.Sprintf("https://%s%s", baseURL, pageURL)
+		}
+		if pageURL == "" {
+			pageURL = fmt.Sprintf("https://%s/book/%s", baseURL, id)
+		}
 
-			// Skip if it's clearly not a book link
-			if strings.Contains(href, "javascript") ||
-				strings.Contains(href, "#") ||
-				strings.Contains(href, "mailto") ||
-				strings.Contains(href, "tel:") {
-				return
-			}
+		title := strings.TrimSpace(jb.Title)
+		if title == "" {
+			continue
+		}
+		if len(title) > 200 {
+			title = title[:197] + "..."
+		}
 
-			// Extract ID from href
-			var md5Hash string
-			if matches := regexp.MustCompile(`/book/(\d+)`).FindStringSubmatch(href); len(matches) > 1 {
-				md5Hash = matches[1]
-			} else if matches := regexp.MustCompile(`/md5/([a-fA-F0-9]{32})`).FindStringSubmatch(href); len(matches) > 1 {
-				md5Hash = matches[1]
-			} else if matches := regexp.MustCompile(`\d{5,}`).FindString(href); len(matches) > 0 {
-				md5Hash = matches
-			}
-
-			if md5Hash != "" && !seenMD5[md5Hash] {
-				seenMD5[md5Hash] = true
-				book := &Book{
-					MD5Hash:  md5Hash,
-					PageURL:  fmt.Sprintf("https://%s%s", baseURL, href),
-					Title:     strings.TrimSpace(s.Text()),
-					Source:    "zlibrary",
-				}
-				if book.Title != "" && len(book.Title) > 3 {
-					books = append(books, book)
-				}
-			}
+		books = append(books, &Book{
+			MD5Hash:  id,
+			Title:    title,
+			Authors:  strings.TrimSpace(jb.Author),
+			Year:     strings.TrimSpace(jb.Year),
+			Language: strings.TrimSpace(jb.Language),
+			Format:   strings.ToUpper(strings.TrimSpace(jb.Format)),
+			Size:     strings.TrimSpace(jb.Size),
+			PageURL:  pageURL,
+			Source:   "zlibrary",
 		})
 	}
 
@@ -409,93 +411,121 @@ func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, er
 		return nil, ErrNoResults
 	}
 
-	// Limit results
-	if len(books) > limit {
-		books = books[:limit]
+	return books, nil
+}
+
+// parseSearchResultsHTML is a fallback parser for when Z-Library renders without shadow DOM.
+func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, err
+	}
+
+	var books []*Book
+	seen := make(map[string]bool)
+
+	selectors := []string{
+		"[data-id]",
+		".book-item",
+		".book-card",
+		".resItem",
+		"article",
+	}
+
+	for _, selector := range selectors {
+		doc.Find(selector).Each(func(_ int, s *goquery.Selection) {
+			if len(books) >= limit {
+				return
+			}
+			book := parseBookElementZ(s, baseURL)
+			if book != nil && book.MD5Hash != "" && !seen[book.MD5Hash] {
+				seen[book.MD5Hash] = true
+				books = append(books, book)
+			}
+		})
+		if len(books) > 0 {
+			break
+		}
+	}
+
+	if len(books) == 0 {
+		bookIDRe := bookIDRegexp()
+		doc.Find("a[href*='/book/']").Each(func(_ int, s *goquery.Selection) {
+			if len(books) >= limit {
+				return
+			}
+			href, exists := s.Attr("href")
+			if !exists {
+				return
+			}
+			matches := bookIDRe.FindStringSubmatch(href)
+			if len(matches) < 2 {
+				return
+			}
+			id := matches[1]
+			if seen[id] {
+				return
+			}
+			title := strings.TrimSpace(s.Text())
+			if title == "" || len(title) < 3 {
+				return
+			}
+			seen[id] = true
+			pageURL := href
+			if !strings.HasPrefix(pageURL, "http") {
+				pageURL = fmt.Sprintf("https://%s%s", baseURL, href)
+			}
+			books = append(books, &Book{
+				MD5Hash: id,
+				Title:   title,
+				PageURL: pageURL,
+				Source:  "zlibrary",
+			})
+		})
+	}
+
+	if len(books) == 0 {
+		return nil, ErrNoResults
 	}
 
 	return books, nil
 }
 
-// parseBookElementZ extracts book information from a goquery selection (browser-html parsed)
+// parseBookElementZ extracts book information from a goquery selection.
 func parseBookElementZ(s *goquery.Selection, baseURL string) *Book {
-	book := &Book{}
-	book.Source = "zlibrary" // Set source
+	book := &Book{Source: "zlibrary"}
 
-	// Try to find MD5/id from various attributes
-	// Look in data-id, id, or href attributes
 	if id, exists := s.Attr("data-id"); exists && id != "" {
 		book.MD5Hash = id
 		book.PageURL = fmt.Sprintf("https://%s/book/%s", baseURL, id)
-	} else if href, exists := s.Find("a").Attr("href"); exists && href != "" {
-		// Extract ID from href
-		if matches := regexp.MustCompile(`/book/(\d+)`).FindStringSubmatch(href); len(matches) > 1 {
+	} else if href, exists := s.Find("a").Attr("href"); exists {
+		if matches := bookIDRegexp().FindStringSubmatch(href); len(matches) > 1 {
 			book.MD5Hash = matches[1]
 			book.PageURL = fmt.Sprintf("https://%s/book/%s", baseURL, book.MD5Hash)
 		}
 	}
 
-	// Extract title
-	titleSelectors := []string{"h3", "h4", ".title", ".book-title", "a"}
-	for _, selector := range titleSelectors {
-		if title := s.Find(selector).First().Text(); title != "" {
+	for _, sel := range []string{"h3", "h4", ".title", ".book-title", "a"} {
+		if title := s.Find(sel).First().Text(); title != "" {
 			book.Title = strings.TrimSpace(title)
 			break
 		}
 	}
-
-	if book.Title == "" {
+	if book.Title == "" || book.MD5Hash == "" {
 		return nil
 	}
-
-	// Limit title length
 	if len(book.Title) > 200 {
 		book.Title = book.Title[:197] + "..."
 	}
 
-	// Extract metadata from sibling elements
-	metaText := ""
-
-	// Look for metadata in the same container
-	s.Parent().Find(".book-meta, .meta-info, .text-muted, div").Each(func(_ int, sibling *goquery.Selection) {
-		metaText += " " + sibling.Text()
-	})
-
-	metaText = strings.ToLower(metaText)
-
-	// Format detection
-	for _, format := range []string{"epub", "pdf", "mobi", "azw3", "djvu", "fb2", "cbr", "cbz"} {
-		if strings.Contains(metaText, format) {
-			book.Format = strings.ToUpper(format)
-			break
-		}
-	}
-
-	// Size detection (e.g., "5.2MB", "1.1 GB")
-	if sizeMatch := regexp.MustCompile(`(\d+\.?\d*)\s*(KB|MB|GB)`).FindStringSubmatch(metaText); len(sizeMatch) > 0 {
-		book.Size = sizeMatch[0]
-	}
-
-	// Language detection
-	for _, lang := range []string{"english", "russian", "german", "french", "spanish", "chinese", "japanese", "portuguese", "italian"} {
-		if strings.Contains(metaText, lang) {
-			book.Language = strings.Title(lang)
-			break
-		}
-	}
-
-	// Author detection
 	if author := s.Find(".author, .book-author").Text(); author != "" {
 		book.Authors = strings.TrimSpace(author)
 	}
 
-	if book.MD5Hash != "" || book.PageURL != "" {
-		return book
-	}
-	return nil
+	return book
 }
 
-// parseDownloadPageHTML parses download links from the book page HTML
+// parseDownloadPageHTML parses download links from the book page HTML.
 func parseDownloadPageHTML(html string, baseURL string) (*DownloadInfo, error) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
@@ -504,17 +534,14 @@ func parseDownloadPageHTML(html string, baseURL string) (*DownloadInfo, error) {
 
 	info := &DownloadInfo{}
 
-	// Look for download buttons and links
 	doc.Find("a[href*='download'], .download-btn a, .btn-download").Each(func(_ int, s *goquery.Selection) {
 		href, exists := s.Attr("href")
 		if exists && href != "" && !strings.Contains(href, "javascript") {
-			// Make absolute URL if needed
 			if !strings.HasPrefix(href, "http") {
 				if strings.HasPrefix(href, "/") {
 					href = fmt.Sprintf("https://%s%s", baseURL, href)
 				}
 			}
-
 			if info.DirectURL == "" {
 				info.DirectURL = href
 			}
@@ -522,7 +549,6 @@ func parseDownloadPageHTML(html string, baseURL string) (*DownloadInfo, error) {
 		}
 	})
 
-	// Also look for direct file links
 	doc.Find("a[href*='.pdf'], a[href*='.epub'], a[href*='.mobi']").Each(func(_ int, s *goquery.Selection) {
 		href, exists := s.Attr("href")
 		if exists && href != "" && strings.HasPrefix(href, "http") {
@@ -530,7 +556,6 @@ func parseDownloadPageHTML(html string, baseURL string) (*DownloadInfo, error) {
 		}
 	})
 
-	// If no direct URL found, use first mirror
 	if info.DirectURL == "" && len(info.MirrorURLs) > 0 {
 		info.DirectURL = info.MirrorURLs[0]
 	}

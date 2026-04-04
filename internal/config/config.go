@@ -103,7 +103,7 @@ func GetConfigPath() string {
 // Init initializes the configuration
 func Init(cfgFile string) error {
 	// Set defaults
-	viper.SetDefault("anna.base_url", "annas-archive.li")
+	viper.SetDefault("anna.base_url", "annas-archive.gl")
 	viper.SetDefault("zlibrary.base_url", "z-library.sk")
 	viper.SetDefault("liber3.base_url", "liber3.eth.limo")
 	viper.SetDefault("downloads.path", "~/Downloads/books")

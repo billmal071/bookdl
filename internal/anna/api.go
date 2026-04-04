@@ -18,7 +18,7 @@ type APIClient struct {
 // NewAPIClient creates a new API client
 func NewAPIClient(apiKey, baseURL string) *APIClient {
 	if baseURL == "" {
-		baseURL = "annas-archive.li"
+		baseURL = "annas-archive.gl"
 	}
 	return &APIClient{
 		apiKey:  apiKey,

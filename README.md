@@ -1,9 +1,10 @@
 # bookdl
 
-A command-line tool for searching and downloading books from Anna's Archive.
+A command-line tool for searching and downloading books from multiple sources: Anna's Archive, Z-Library, and Liber3.
 
 ## Features
 
+- **Multi-Source Search**: Search across Anna's Archive, Z-Library, and Liber3 simultaneously or individually
 - **Interactive Search**: Search for books with an interactive TUI selector
 - **Resumable Downloads**: Pause and resume downloads with chunk-based progress tracking
 - **Multiple Access Methods**: Supports API access and web scraping with Cloudflare bypass
@@ -37,8 +38,16 @@ make install
 ### Search for Books
 
 ```bash
-# Basic search
+# Basic search (searches all sources by default)
 bookdl search "clean code"
+
+# Search a specific source
+bookdl search --source zlibrary "clean code"
+bookdl search --source anna "clean code"
+bookdl search --source liber3 "clean code"
+
+# Search all sources explicitly
+bookdl search --source all "clean code"
 
 # Search with format filter
 bookdl search -f epub "design patterns"
@@ -61,6 +70,9 @@ bookdl search -n 10 "golang programming"
 
 # Search and immediately download
 bookdl search -d "pragmatic programmer"
+
+# Non-interactive mode (print results and exit)
+bookdl search --no-interactive "pragmatic programmer"
 ```
 
 In the interactive selector:
@@ -200,8 +212,14 @@ Configuration file location: `~/.config/bookdl/config.yaml`
 
 ```yaml
 anna:
-  base_url: "annas-archive.li"
+  base_url: "annas-archive.gl"
   api_key: ""  # Optional API key for faster access
+
+zlibrary:
+  base_url: "z-library.sk"
+
+liber3:
+  base_url: "liber3.eth.limo"
 
 downloads:
   path: "~/Downloads/books"
@@ -230,12 +248,12 @@ export BOOKDL_ANNA_API_KEY=your-api-key
 
 ## How It Works
 
-1. **Search**: Queries Anna's Archive for books matching your search
-2. **Selection**: Presents results in an interactive terminal UI
+1. **Search**: Queries configured sources (Anna's Archive, Z-Library, Liber3) for books matching your search
+2. **Selection**: Presents results in an interactive terminal UI, grouped by source
 3. **Download**: Fetches the book using available mirrors with automatic fallback
 4. **Resumable**: Downloads are split into chunks and tracked in a local SQLite database
 
-When Cloudflare protection is detected, bookdl automatically falls back to a headless browser to bypass the challenge.
+When Cloudflare protection is detected, bookdl automatically falls back to a headless browser to bypass the challenge. Z-Library uses client-side rendering via Web Components, so the browser is always used for Z-Library searches.
 
 ## Troubleshooting
 
@@ -273,10 +291,14 @@ bookdl/
 ├── cmd/bookdl/          # Entry point
 ├── internal/
 │   ├── anna/            # Anna's Archive client (API, scraper, browser)
+│   ├── zlibrary/        # Z-Library client (scraper, browser with Web Components)
+│   ├── liber3/          # Liber3 client (scraper, browser)
+│   ├── search/          # Multi-source search orchestrator
 │   ├── cli/             # CLI commands
 │   ├── config/          # Configuration management
 │   ├── db/              # SQLite database layer
 │   ├── downloader/      # Download manager
+│   ├── notify/          # Desktop notifications
 │   └── tui/             # Terminal UI components
 ├── build/               # Build output
 ├── Makefile             # Build automation

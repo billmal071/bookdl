@@ -29,7 +29,7 @@ type ScraperClient struct {
 // NewScraperClient creates a new scraper client
 func NewScraperClient(baseURL string) *ScraperClient {
 	if baseURL == "" {
-		baseURL = "annas-archive.li"
+		baseURL = "annas-archive.gl"
 	}
 	return &ScraperClient{
 		baseURL: baseURL,
