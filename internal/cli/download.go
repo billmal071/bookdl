@@ -14,6 +14,7 @@ import (
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
 	"github.com/billmal071/bookdl/internal/notify"
+	"github.com/billmal071/bookdl/internal/liber3"
 	"github.com/billmal071/bookdl/internal/zlibrary"
 )
 
@@ -81,6 +82,18 @@ func getDownloadInfoForSource(ctx context.Context, bookID string, source string)
 			MirrorURLs: zInfo.MirrorURLs,
 			Filename:   zInfo.Filename,
 			FileSize:   zInfo.FileSize,
+		}, nil
+	case "liber3":
+		lClient := liber3.NewClient()
+		lInfo, err := lClient.GetDownloadInfo(ctx, bookID)
+		if err != nil {
+			return nil, err
+		}
+		return &anna.DownloadInfo{
+			DirectURL:  lInfo.DirectURL,
+			MirrorURLs: lInfo.MirrorURLs,
+			Filename:   lInfo.Filename,
+			FileSize:   lInfo.FileSize,
 		}, nil
 	default:
 		client := anna.NewClient()
@@ -349,6 +362,8 @@ func buildSourceURL(source, bookID string) string {
 	switch source {
 	case "zlibrary":
 		return fmt.Sprintf("https://%s/book/%s", zlibrary.GetBaseURL(), bookID)
+	case "liber3":
+		return fmt.Sprintf("https://%s/book/%s", liber3.GetBaseURL(), bookID)
 	default:
 		return fmt.Sprintf("https://%s/md5/%s", anna.GetBaseURL(), bookID)
 	}
