@@ -108,7 +108,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 					fmt.Printf("    ⚠️  Failed to reset download: %v\n", err)
 				} else {
 					// Trigger re-download
-					if err := runDownloadByHash(cmd.Context(), download.MD5Hash, "", nil); err != nil {
+					if err := runDownloadByHash(cmd.Context(), download.MD5Hash, "", nil, ""); err != nil {
 						fmt.Printf("    ⚠️  Re-download failed: %v\n", err)
 					} else {
 						fmt.Printf("    ✓ Re-download completed\n")

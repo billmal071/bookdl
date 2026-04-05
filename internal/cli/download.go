@@ -14,38 +14,96 @@ import (
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
 	"github.com/billmal071/bookdl/internal/notify"
+	"github.com/billmal071/bookdl/internal/zlibrary"
 )
 
 var downloadCmd = &cobra.Command{
-	Use:   "download [md5-hash]",
-	Short: "Download a book by MD5 hash",
-	Long: `Download a book from Anna's Archive using its MD5 hash.
+	Use:   "download [book-id]",
+	Short: "Download a book by its ID or MD5 hash",
+	Long: `Download a book using its ID or MD5 hash.
 
-The MD5 hash can be obtained from the search results.
+The ID can be obtained from the search results. Use --source to specify
+which source the ID belongs to (auto-detected if not specified).
 
 Examples:
-  bookdl download abc123def456789...
+  bookdl download abc123def456789...                    # Anna's Archive (32-char MD5)
+  bookdl download 115469056                             # auto-detects Z-Library/Liber3
+  bookdl download 115469056 --source zlibrary           # explicit source
   bookdl download -o ~/Books abc123def456789...`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputDir, _ := cmd.Flags().GetString("output")
-		return runDownloadByHash(cmd.Context(), args[0], outputDir, nil)
+		source, _ := cmd.Flags().GetString("source")
+		return runDownloadByHash(cmd.Context(), args[0], outputDir, nil, source)
 	},
 }
 
 func init() {
 	downloadCmd.Flags().StringP("output", "o", "", "output directory (default: ~/Downloads/books)")
+	downloadCmd.Flags().String("source", "", "book source: anna, zlibrary, or liber3 (auto-detected if not specified)")
 }
 
-// runDownloadByHash downloads a book by its MD5 hash
-func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bookInfo *anna.Book) error {
+// detectSource guesses the source from the book ID format.
+// 32-char hex strings are Anna's Archive MD5 hashes; numeric IDs are Z-Library.
+func detectSource(id string) string {
+	if len(id) == 32 {
+		isHex := true
+		for _, c := range id {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				isHex = false
+				break
+			}
+		}
+		if isHex {
+			return "anna"
+		}
+	}
+	// Numeric IDs are typically Z-Library
+	for _, c := range id {
+		if c < '0' || c > '9' {
+			return "anna" // unknown format, default to anna
+		}
+	}
+	return "zlibrary"
+}
+
+// getDownloadInfoForSource fetches download info from the appropriate source client.
+func getDownloadInfoForSource(ctx context.Context, bookID string, source string) (*anna.DownloadInfo, error) {
+	switch source {
+	case "zlibrary":
+		zClient := zlibrary.NewClient()
+		zInfo, err := zClient.GetDownloadInfo(ctx, bookID)
+		if err != nil {
+			return nil, err
+		}
+		return &anna.DownloadInfo{
+			DirectURL:  zInfo.DirectURL,
+			MirrorURLs: zInfo.MirrorURLs,
+			Filename:   zInfo.Filename,
+			FileSize:   zInfo.FileSize,
+		}, nil
+	default:
+		client := anna.NewClient()
+		return client.GetDownloadInfo(ctx, bookID)
+	}
+}
+
+// runDownloadByHash downloads a book by its MD5 hash or numeric ID
+func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bookInfo *anna.Book, source string) error {
 	// Normalize hash
 	md5Hash = strings.ToLower(strings.TrimSpace(md5Hash))
 
-	// Validate hash format — accept 32-char MD5 hashes (Anna's Archive)
-	// and numeric IDs (Z-Library, Liber3)
 	if len(md5Hash) == 0 {
 		return fmt.Errorf("invalid book ID: must not be empty")
+	}
+
+	// Detect source if not specified
+	if source == "" {
+		if bookInfo != nil && bookInfo.Source != "" {
+			source = bookInfo.Source
+		} else {
+			source = detectSource(md5Hash)
+		}
 	}
 
 	// Set output directory
@@ -80,19 +138,23 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	}
 
 	// Get book info if not provided
-	client := anna.NewClient()
-
 	if bookInfo == nil {
 		fmt.Printf("Fetching book information...\n")
-		books, err := client.Search(ctx, md5Hash, 1)
-		if err == nil && len(books) > 0 {
-			bookInfo = books[0]
+		switch source {
+		case "zlibrary":
+			// Z-Library doesn't support search-by-ID well, skip
+		default:
+			client := anna.NewClient()
+			books, err := client.Search(ctx, md5Hash, 1)
+			if err == nil && len(books) > 0 {
+				bookInfo = books[0]
+			}
 		}
 	}
 
 	// Get download links
-	fmt.Printf("Getting download links...\n")
-	dlInfo, err := client.GetDownloadInfo(ctx, md5Hash)
+	fmt.Printf("Getting download links from %s...\n", source)
+	dlInfo, err := getDownloadInfoForSource(ctx, md5Hash, source)
 	if err != nil {
 		return fmt.Errorf("failed to get download info: %w", err)
 	}
@@ -132,7 +194,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		Title:     getTitle(bookInfo, md5Hash),
 		Authors:   getAuthors(bookInfo),
 		Format:    getFormat(bookInfo),
-		SourceURL: fmt.Sprintf("https://%s/md5/%s", anna.GetBaseURL(), md5Hash),
+		SourceURL: buildSourceURL(source, md5Hash),
 		FilePath:  filePath,
 		TempPath:  tempPath,
 		Status:    db.StatusPending,
@@ -281,4 +343,13 @@ func getFormat(book *anna.Book) string {
 		return book.Format
 	}
 	return "EPUB"
+}
+
+func buildSourceURL(source, bookID string) string {
+	switch source {
+	case "zlibrary":
+		return fmt.Sprintf("https://%s/book/%s", zlibrary.GetBaseURL(), bookID)
+	default:
+		return fmt.Sprintf("https://%s/md5/%s", anna.GetBaseURL(), bookID)
+	}
 }

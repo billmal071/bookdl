@@ -579,7 +579,7 @@ func startBookDownload(ctx context.Context, book *anna.Book) error {
 	// This will be implemented in the download command
 	// For now, just print the command to run
 	fmt.Printf("Starting download: %s\n", book.Title)
-	return runDownloadByHash(ctx, book.MD5Hash, "", book)
+	return runDownloadByHash(ctx, book.MD5Hash, "", book, book.Source)
 }
 
 // saveSearchHistory saves a search to the history database

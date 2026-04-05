@@ -229,7 +229,7 @@ func downloadBookmarks(ctx context.Context) error {
 		}
 
 		// Start download
-		if err := runDownloadByHash(ctx, b.MD5Hash, "", nil); err != nil {
+		if err := runDownloadByHash(ctx, b.MD5Hash, "", nil, ""); err != nil {
 			errors = append(errors, fmt.Errorf("%s: %w", b.Title, err))
 		} else {
 			success++
