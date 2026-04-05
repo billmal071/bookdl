@@ -200,7 +200,10 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	}
 
 	// Determine filename — sanitize remote-provided filenames to prevent path traversal
-	filename := sanitizeFilename(filepath.Base(dlInfo.Filename))
+	filename := ""
+	if dlInfo.Filename != "" {
+		filename = sanitizeFilename(filepath.Base(dlInfo.Filename))
+	}
 	if filename == "" && bookInfo != nil {
 		// Create filename from book info
 		safeName := sanitizeFilename(bookInfo.Title)
