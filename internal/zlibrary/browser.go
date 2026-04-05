@@ -278,11 +278,9 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 	return parseDownloadPageHTML(htmlContent, c.baseURL)
 }
 
-// ResolveDownloadURL navigates to a download page and extracts the actual download URL
+// ResolveDownloadURL navigates to a Z-Library download URL (e.g. /dl/...)
+// using the browser and captures the actual file download URL via JS interception.
 func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, downloadPageURL string) (string, error) {
-	// This method may not be needed for Z-Library as they typically provide direct download links
-	// But included for compatibility with Anna's Archive structure
-
 	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get browser context: %w", err)
@@ -292,47 +290,98 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, downloadPageURL 
 	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 90*time.Second)
 	defer timeoutCancel()
 
-	var htmlContent string
-	var downloadURL string
-
-	// Navigate to download page
+	// Navigate to the download URL. Z-Library /dl/ endpoints typically redirect
+	// to the actual file or show a download page with a link.
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(downloadPageURL),
-		// Wait for anti-bot challenge
-		chromedp.Sleep(8*time.Second),
+		chromedp.Sleep(5*time.Second),
 	)
 	if err != nil {
 		return "", fmt.Errorf("browser navigation failed: %w", err)
 	}
 
-	// Try to extract direct download link
-	err = chromedp.Run(browserCtx,
-		chromedp.OuterHTML("html", &htmlContent),
-	)
+	// Check where we ended up — the browser may have redirected to the file
+	var currentURL string
+	err = chromedp.Run(browserCtx, chromedp.Location(&currentURL))
 	if err != nil {
-		return "", fmt.Errorf("failed to get page content: %w", err)
+		return "", fmt.Errorf("failed to get current URL: %w", err)
 	}
 
-	// Parse HTML to find download link
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-	if err != nil {
-		return "", fmt.Errorf("failed to parse HTML: %w", err)
+	// If we redirected to a direct file URL, use it
+	lowerURL := strings.ToLower(currentURL)
+	for _, ext := range []string{".pdf", ".epub", ".mobi", ".azw3", ".djvu", ".fb2"} {
+		if strings.Contains(lowerURL, ext) {
+			return currentURL, nil
+		}
 	}
 
-	// Look for download button or link
-	doc.Find("a[href*='download'], .download-btn a, button[onclick*='download']").Each(func(_ int, s *goquery.Selection) {
-		if downloadURL != "" {
-			return
-		}
-
-		href, exists := s.Attr("href")
-		if exists && href != "" && strings.HasPrefix(href, "http") {
-			downloadURL = href
-		}
-	})
+	// Otherwise, try to extract a download link from the page
+	var downloadURL string
+	err = chromedp.Run(browserCtx, chromedp.Evaluate(`
+		(function() {
+			// Look for direct download links
+			var selectors = [
+				'a[href*="/dl/"]',
+				'a[href*="download"]',
+				'.download-btn a',
+				'a.btn-download',
+				'a[href$=".pdf"]',
+				'a[href$=".epub"]',
+				'a[href$=".mobi"]'
+			];
+			for (var i = 0; i < selectors.length; i++) {
+				var el = document.querySelector(selectors[i]);
+				if (el && el.href && !el.href.includes('javascript')) {
+					return el.href;
+				}
+			}
+			return '';
+		})()
+	`, &downloadURL))
+	if err != nil {
+		return "", fmt.Errorf("failed to extract download URL: %w", err)
+	}
 
 	if downloadURL == "" {
-		return "", fmt.Errorf("no download URL found")
+		// Final attempt: wait longer and check again (some pages have countdowns)
+		err = chromedp.Run(browserCtx,
+			chromedp.Sleep(10*time.Second),
+		)
+		if err != nil {
+			return "", fmt.Errorf("polling interrupted: %w", err)
+		}
+
+		var htmlContent string
+		err = chromedp.Run(browserCtx, chromedp.OuterHTML("html", &htmlContent))
+		if err != nil {
+			return "", fmt.Errorf("failed to get page content: %w", err)
+		}
+
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+		if err != nil {
+			return "", fmt.Errorf("failed to parse HTML: %w", err)
+		}
+
+		doc.Find("a[href]").Each(func(_ int, s *goquery.Selection) {
+			if downloadURL != "" {
+				return
+			}
+			href, exists := s.Attr("href")
+			if !exists || href == "" {
+				return
+			}
+			hrefLower := strings.ToLower(href)
+			for _, ext := range []string{".pdf", ".epub", ".mobi", ".azw3", ".djvu"} {
+				if strings.Contains(hrefLower, ext) && strings.HasPrefix(href, "http") {
+					downloadURL = href
+					return
+				}
+			}
+		})
+	}
+
+	if downloadURL == "" {
+		return "", fmt.Errorf("no download URL found on page")
 	}
 
 	return downloadURL, nil

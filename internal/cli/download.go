@@ -277,17 +277,28 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 
 	var lastErr error
 	for i, tryURL := range urlsToTry {
-		// For slow_download/fast_download URLs, resolve them via browser
-		if strings.Contains(tryURL, "/slow_download/") || strings.Contains(tryURL, "/fast_download/") {
+		// URLs that need browser resolution (cookies/session/countdown)
+		needsBrowser := strings.Contains(tryURL, "/slow_download/") ||
+			strings.Contains(tryURL, "/fast_download/") ||
+			strings.Contains(tryURL, "/dl/")
+
+		if needsBrowser {
 			if i > 0 {
 				fmt.Printf("Trying mirror %d: resolving download link...\n", i+1)
 			} else {
 				fmt.Printf("Resolving download link...\n")
 			}
-			// Use dlCtx which respects the configured timeout
-			resolvedURL, err := anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
+
+			var resolvedURL string
+			var err error
+			switch source {
+			case "zlibrary":
+				resolvedURL, err = zlibrary.NewBrowserClient(zlibrary.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
+			default:
+				resolvedURL, err = anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
+			}
+
 			if err != nil {
-				// Check if it's a timeout error
 				if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
 					fmt.Printf("Browser resolution timed out. Try increasing browser.max_countdown_wait in config.\n")
 				}
