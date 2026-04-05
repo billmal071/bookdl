@@ -45,8 +45,9 @@ func init() {
 }
 
 // detectSource guesses the source from the book ID format.
-// 32-char hex strings are Anna's Archive MD5 hashes; numeric IDs are Z-Library.
-func detectSource(id string) string {
+// 32-char hex strings are Anna's Archive MD5 hashes.
+// Numeric IDs could be Z-Library or Liber3 — requires --source flag.
+func detectSource(id string) (string, error) {
 	if len(id) == 32 {
 		isHex := true
 		for _, c := range id {
@@ -56,16 +57,21 @@ func detectSource(id string) string {
 			}
 		}
 		if isHex {
-			return "anna"
+			return "anna", nil
 		}
 	}
-	// Numeric IDs are typically Z-Library
+	// Check if numeric
+	isNumeric := true
 	for _, c := range id {
 		if c < '0' || c > '9' {
-			return "anna" // unknown format, default to anna
+			isNumeric = false
+			break
 		}
 	}
-	return "zlibrary"
+	if isNumeric {
+		return "", fmt.Errorf("numeric ID detected — use --source to specify zlibrary or liber3")
+	}
+	return "anna", nil
 }
 
 // getDownloadInfoForSource fetches download info from the appropriate source client.
@@ -115,7 +121,11 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		if bookInfo != nil && bookInfo.Source != "" {
 			source = bookInfo.Source
 		} else {
-			source = detectSource(md5Hash)
+			var err error
+			source, err = detectSource(md5Hash)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
