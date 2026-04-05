@@ -13,8 +13,9 @@ type Book struct {
 	Format    string `json:"format"`
 	Size      string `json:"size"`
 	SizeBytes int64  `json:"size_bytes"`
-	PageURL   string `json:"page_url"`
-	Source    string `json:"source"` // "anna" or "zlibrary"
+	PageURL     string `json:"page_url"`
+	DownloadURL string `json:"download_url,omitempty"` // Direct download path (e.g. Z-Library /dl/...)
+	Source      string `json:"source"`                 // "anna", "zlibrary", or "liber3"
 }
 
 // SearchResult contains search results with metadata

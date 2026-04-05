@@ -339,11 +339,8 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, downloadPageURL 
 	return downloadURL, nil
 }
 
-// bookIDRegexp returns a compiled regexp for extracting book IDs from Z-Library URLs.
-var bookIDRegexp = func() func() *regexp.Regexp {
-	re := regexp.MustCompile(`/book/(\d+)`)
-	return func() *regexp.Regexp { return re }
-}()
+// bookIDRe matches Z-Library book URLs like /book/12345.
+var bookIDRe = regexp.MustCompile(`/book/(\d+)`)
 
 // jsResultToBooks converts the raw JavaScript evaluation result into Book structs.
 func jsResultToBooks(raw any, limit int, baseURL string) ([]*Book, error) {
@@ -390,20 +387,27 @@ func jsResultToBooks(raw any, limit int, baseURL string) ([]*Book, error) {
 		if title == "" {
 			continue
 		}
-		if len(title) > 200 {
-			title = title[:197] + "..."
+		if runes := []rune(title); len(runes) > 200 {
+			title = string(runes[:197]) + "..."
+		}
+
+		dlPath := strings.TrimSpace(jb.Download)
+		var downloadURL string
+		if dlPath != "" {
+			downloadURL = fmt.Sprintf("https://%s%s", baseURL, dlPath)
 		}
 
 		books = append(books, &Book{
-			MD5Hash:  id,
-			Title:    title,
-			Authors:  strings.TrimSpace(jb.Author),
-			Year:     strings.TrimSpace(jb.Year),
-			Language: strings.TrimSpace(jb.Language),
-			Format:   strings.ToUpper(strings.TrimSpace(jb.Format)),
-			Size:     strings.TrimSpace(jb.Size),
-			PageURL:  pageURL,
-			Source:   "zlibrary",
+			MD5Hash:     id,
+			Title:       title,
+			Authors:     strings.TrimSpace(jb.Author),
+			Year:        strings.TrimSpace(jb.Year),
+			Language:    strings.TrimSpace(jb.Language),
+			Format:      strings.ToUpper(strings.TrimSpace(jb.Format)),
+			Size:        strings.TrimSpace(jb.Size),
+			PageURL:     pageURL,
+			DownloadURL: downloadURL,
+			Source:      "zlibrary",
 		})
 	}
 
@@ -449,7 +453,7 @@ func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, er
 	}
 
 	if len(books) == 0 {
-		bookIDRe := bookIDRegexp()
+		bookIDRe := bookIDRe
 		doc.Find("a[href*='/book/']").Each(func(_ int, s *goquery.Selection) {
 			if len(books) >= limit {
 				return
@@ -499,7 +503,7 @@ func parseBookElementZ(s *goquery.Selection, baseURL string) *Book {
 		book.MD5Hash = id
 		book.PageURL = fmt.Sprintf("https://%s/book/%s", baseURL, id)
 	} else if href, exists := s.Find("a").Attr("href"); exists {
-		if matches := bookIDRegexp().FindStringSubmatch(href); len(matches) > 1 {
+		if matches := bookIDRe.FindStringSubmatch(href); len(matches) > 1 {
 			book.MD5Hash = matches[1]
 			book.PageURL = fmt.Sprintf("https://%s/book/%s", baseURL, book.MD5Hash)
 		}

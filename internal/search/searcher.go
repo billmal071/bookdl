@@ -57,17 +57,18 @@ func (s *Searcher) searchZLibrary(ctx context.Context, query string, limit int) 
 	var annaBooks []*anna.Book
 	for _, book := range books {
 		annaBook := &anna.Book{
-			MD5Hash:   book.MD5Hash,
-			Title:     book.Title,
-			Authors:   book.Authors,
-			Publisher: book.Publisher,
-			Year:      book.Year,
-			Language:  book.Language,
-			Format:    book.Format,
-			Size:      book.Size,
-			SizeBytes: book.SizeBytes,
-			PageURL:   book.PageURL,
-			Source:    "zlibrary",
+			MD5Hash:     book.MD5Hash,
+			Title:       book.Title,
+			Authors:     book.Authors,
+			Publisher:   book.Publisher,
+			Year:        book.Year,
+			Language:    book.Language,
+			Format:      book.Format,
+			Size:        book.Size,
+			SizeBytes:   book.SizeBytes,
+			PageURL:     book.PageURL,
+			DownloadURL: book.DownloadURL,
+			Source:      "zlibrary",
 		}
 		annaBooks = append(annaBooks, annaBook)
 	}

@@ -34,7 +34,10 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputDir, _ := cmd.Flags().GetString("output")
-		source, _ := cmd.Flags().GetString("source")
+		source := strings.ToLower(strings.TrimSpace(getString(cmd, "source")))
+		if source != "" && source != "anna" && source != "zlibrary" && source != "liber3" {
+			return fmt.Errorf("unknown source %q: must be anna, zlibrary, or liber3", source)
+		}
 		return runDownloadByHash(cmd.Context(), args[0], outputDir, nil, source)
 	},
 }
@@ -48,6 +51,7 @@ func init() {
 // 32-char hex strings are Anna's Archive MD5 hashes.
 // Numeric IDs could be Z-Library or Liber3 — requires --source flag.
 func detectSource(id string) (string, error) {
+	id = strings.ToLower(id)
 	if len(id) == 32 {
 		isHex := true
 		for _, c := range id {
@@ -175,11 +179,19 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		}
 	}
 
-	// Get download links
-	fmt.Printf("Getting download links from %s...\n", source)
-	dlInfo, err := getDownloadInfoForSource(ctx, md5Hash, source)
-	if err != nil {
-		return fmt.Errorf("failed to get download info: %w", err)
+	// Get download links — use the direct URL from search results if available
+	var dlInfo *anna.DownloadInfo
+	if bookInfo != nil && bookInfo.DownloadURL != "" {
+		dlInfo = &anna.DownloadInfo{
+			DirectURL: bookInfo.DownloadURL,
+		}
+	} else {
+		fmt.Printf("Getting download links from %s...\n", source)
+		var err error
+		dlInfo, err = getDownloadInfoForSource(ctx, md5Hash, source)
+		if err != nil {
+			return fmt.Errorf("failed to get download info: %w", err)
+		}
 	}
 
 	if dlInfo.DirectURL == "" && len(dlInfo.MirrorURLs) == 0 {
@@ -325,6 +337,9 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		}
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no download URLs available")
+	}
 	db.UpdateStatus(download.ID, db.StatusFailed, lastErr.Error())
 	notify.DownloadFailed(download.Title, lastErr.Error())
 	return fmt.Errorf("download failed after trying all mirrors: %w", lastErr)
