@@ -42,9 +42,10 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	// Normalize hash
 	md5Hash = strings.ToLower(strings.TrimSpace(md5Hash))
 
-	// Validate hash format
-	if len(md5Hash) != 32 {
-		return fmt.Errorf("invalid MD5 hash: must be 32 characters")
+	// Validate hash format — accept 32-char MD5 hashes (Anna's Archive)
+	// and numeric IDs (Z-Library, Liber3)
+	if len(md5Hash) == 0 {
+		return fmt.Errorf("invalid book ID: must not be empty")
 	}
 
 	// Set output directory
