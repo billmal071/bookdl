@@ -48,8 +48,6 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 	var cloudflareDetected bool
 	var scrapeErr error
 
-	fmt.Printf("[DEBUG] ScraperClient.SearchPage: starting search for '%s'\n", query)
-
 	collector := colly.NewCollector(
 		colly.AllowedDomains(c.baseURL),
 		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
@@ -60,13 +58,11 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 	// Detect Cloudflare challenge
 	collector.OnResponse(func(r *colly.Response) {
 		body := string(r.Body)
-		fmt.Printf("[DEBUG] Scraper got response: status=%d, body_len=%d\n", r.StatusCode, len(body))
 		if r.StatusCode == 403 || r.StatusCode == 503 ||
 			strings.Contains(body, "cf-browser-verification") ||
 			strings.Contains(body, "Just a moment...") ||
 			strings.Contains(body, "_cf_chl") {
 			cloudflareDetected = true
-			fmt.Printf("[DEBUG] Cloudflare detected, will fall back to browser\n")
 		}
 	})
 
@@ -84,13 +80,11 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 		if book != nil && book.MD5Hash != "" && !seenMD5[book.MD5Hash] {
 			seenMD5[book.MD5Hash] = true
 			books = append(books, book)
-			fmt.Printf("[DEBUG] Scraper found book: %s\n", book.Title)
 		}
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
 		scrapeErr = err
-		fmt.Printf("[DEBUG] Scraper error: %v\n", err)
 	})
 
 	// Build search URL with pagination - liber3 uses hash-based routing
@@ -99,10 +93,8 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 		searchURL = fmt.Sprintf("%s&page=%d", searchURL, page)
 	}
 
-	fmt.Printf("[DEBUG] Scraper visiting URL: %s\n", searchURL)
 	err := collector.Visit(searchURL)
 	if err != nil {
-		fmt.Printf("[DEBUG] Scraper visit failed: %v, falling back to browser\n", err)
 		// Try browser fallback
 		return c.browser.SearchPage(ctx, query, limit, page)
 	}
@@ -110,8 +102,6 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 	collector.Wait()
 
 	if cloudflareDetected {
-		// Fall back to headless browser
-		fmt.Printf("[DEBUG] Cloudflare detected, falling back to browser\n")
 		return c.browser.SearchPage(ctx, query, limit, page)
 	}
 
@@ -120,7 +110,6 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 	}
 
 	if len(books) == 0 {
-		fmt.Printf("[DEBUG] Scraper found no books, falling back to browser\n")
 		// Fall back to browser for SPA content
 		return c.browser.SearchPage(ctx, query, limit, page)
 	}

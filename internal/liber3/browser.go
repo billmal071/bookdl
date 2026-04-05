@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -149,20 +148,7 @@ func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int,
 		return nil, fmt.Errorf("browser search failed: %w", err)
 	}
 
-	// Debug: log HTML size
-	if len(htmlContent) > 0 {
-		fmt.Printf("[DEBUG] Got %d bytes of HTML from Liber3\n", len(htmlContent))
-		// Save HTML to file for inspection
-		if err := os.WriteFile("/tmp/liber3_debug.html", []byte(htmlContent), 0644); err == nil {
-			fmt.Printf("[DEBUG] Saved HTML to /tmp/liber3_debug.html\n")
-		}
-		// Show a preview of the HTML to understand structure
-		preview := htmlContent
-		if len(preview) > 1000 {
-			preview = preview[:1000]
-		}
-		fmt.Printf("[DEBUG] HTML preview: %s\n", preview)
-	} else {
+	if len(htmlContent) == 0 {
 		return nil, fmt.Errorf("no HTML content received from Liber3")
 	}
 
@@ -206,8 +192,6 @@ func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, er
 	var books []*Book
 	var seenMD5 = make(map[string]bool)
 
-	fmt.Printf("[DEBUG] Starting to parse HTML for books...\n")
-
 	// Liber3 uses a specific structure:
 	// <div><div style="display: flex;">
 	//   <div style="flex: 1 1 0%; display: flex; flex-direction: column;">
@@ -235,7 +219,6 @@ func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, er
 		}
 
 		tagsText := strings.TrimSpace(tagsDiv.Text())
-		fmt.Printf("[DEBUG] Found book: %s, tags: %s\n", title, tagsText)
 
 		// Parse tags: "Author / Language / format / size / IPFS"
 		parts := strings.Split(tagsText, "/")
@@ -287,7 +270,6 @@ func parseSearchResultsHTML(html string, limit int, baseURL string) ([]*Book, er
 		if book.MD5Hash != "" && !seenMD5[book.MD5Hash] {
 			seenMD5[book.MD5Hash] = true
 			books = append(books, book)
-			fmt.Printf("[DEBUG] Added book: %s (MD5: %s)\n", book.Title, book.MD5Hash)
 		}
 	})
 
