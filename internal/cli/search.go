@@ -275,8 +275,13 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Print selected book info
 	fmt.Printf("Selected: %s\n", selected.Title)
 	fmt.Printf("MD5: %s\n", selected.MD5Hash)
-	fmt.Printf("\nTo download, run:\n")
-	fmt.Printf("  bookdl download %s\n", selected.MD5Hash)
+	if selected.Source != "" && selected.Source != "anna" {
+		fmt.Printf("\nTo download, run:\n")
+		fmt.Printf("  bookdl download %s --source %s\n", selected.MD5Hash, selected.Source)
+	} else {
+		fmt.Printf("\nTo download, run:\n")
+		fmt.Printf("  bookdl download %s\n", selected.MD5Hash)
+	}
 
 	return nil
 }
