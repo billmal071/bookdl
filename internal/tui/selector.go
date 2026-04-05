@@ -12,6 +12,13 @@ import (
 	"github.com/billmal071/bookdl/internal/anna"
 )
 
+func truncateMD5(hash string) string {
+	if len(hash) > 16 {
+		return hash[:16] + "..."
+	}
+	return hash
+}
+
 // LoadMoreFunc is a callback to load more search results
 type LoadMoreFunc func() ([]*anna.Book, error)
 
@@ -96,7 +103,7 @@ func (d BookDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			str = SelectedStyle.Render(fmt.Sprintf("  ➤ %d. %s", index+1, title))
 		}
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      %s", book.Description()))
-		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", book.Book.MD5Hash[:16]+"..."))
+		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", truncateMD5(book.Book.MD5Hash)))
 	} else {
 		if d.selectedMD5s != nil {
 			// Multi-select mode
@@ -109,7 +116,7 @@ func (d BookDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			str = NormalStyle.Render(fmt.Sprintf("    %d. %s", index+1, title))
 		}
 		str += "\n" + DimStyle.Render(fmt.Sprintf("      %s", book.Description()))
-		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", book.Book.MD5Hash[:16]+"..."))
+		str += "\n" + DimStyle.Render(fmt.Sprintf("      MD5: %s", truncateMD5(book.Book.MD5Hash)))
 	}
 
 	fmt.Fprint(w, str)
@@ -523,6 +530,9 @@ func RunSelectorWithLoadMore(books []*anna.Book, loadMore LoadMoreFunc) (*anna.B
 		return nil, err
 	}
 
+	if finalModel == nil {
+		return nil, fmt.Errorf("TUI exited unexpectedly")
+	}
 	selector := finalModel.(SelectorModel)
 	if selector.err != nil {
 		return nil, selector.err
@@ -545,6 +555,9 @@ func RunMultiSelector(books []*anna.Book, loadMore LoadMoreFunc) ([]*anna.Book, 
 		return nil, err
 	}
 
+	if finalModel == nil {
+		return nil, fmt.Errorf("TUI exited unexpectedly")
+	}
 	selector := finalModel.(SelectorModel)
 	if selector.err != nil {
 		return nil, selector.err
