@@ -114,10 +114,26 @@ func printDownload(d *db.Download) {
 		fmt.Printf("   File: %s\n", d.FilePath)
 	}
 
+	// Source
+	fmt.Printf("   Source: %s\n", inferSource(d.SourceURL))
+
 	// MD5
 	fmt.Printf("   MD5: %s\n", d.MD5Hash)
 
 	fmt.Println()
+}
+
+func inferSource(sourceURL string) string {
+	switch {
+	case strings.Contains(sourceURL, "z-library"):
+		return "zlibrary"
+	case strings.Contains(sourceURL, "liber3"):
+		return "liber3"
+	case strings.Contains(sourceURL, "annas-archive"):
+		return "anna"
+	default:
+		return "unknown"
+	}
 }
 
 func formatBytes(bytes int64) string {
