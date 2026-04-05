@@ -13,8 +13,9 @@ type Book struct {
 	Format    string `json:"format"`
 	Size      string `json:"size"`
 	SizeBytes int64  `json:"size_bytes"`
-	PageURL   string `json:"page_url"`
-	Source    string `json:"source"` // "liber3"
+	PageURL     string `json:"page_url"`
+	DownloadURL string `json:"download_url,omitempty"`
+	Source      string `json:"source"` // "liber3"
 }
 
 // SearchResult contains search results with metadata

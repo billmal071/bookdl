@@ -2,11 +2,10 @@ package liber3
 
 import "github.com/billmal071/bookdl/internal/config"
 
-// NewClient creates a new Liber3 client
-// For now, always uses the scraper as there's no known API
+// NewClient creates a new Liber3 client.
+// Uses the API client for reliable search and download via IPFS.
 func NewClient() Client {
-	cfg := config.Get()
-	return NewScraperClient(cfg.Liber3.BaseURL)
+	return NewAPIClient()
 }
 
 // GetBaseURL returns the configured base URL for Liber3
