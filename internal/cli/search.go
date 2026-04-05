@@ -90,6 +90,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 		// Parse source option
+		sourceOpt = strings.ToLower(strings.TrimSpace(sourceOpt))
 		var searchOpt search.Option
 		switch sourceOpt {
 		case "anna":
@@ -101,9 +102,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		case "liber3":
 			searchOpt = search.OptionLiber3
 			Printf("Searching Liber3 only\n")
-		default:
+		case "all", "":
 			searchOpt = search.OptionAll
-			Printf("Searching all sources\n")
+		default:
+			return fmt.Errorf("unknown source %q: must be all, anna, zlibrary, or liber3", sourceOpt)
 		}
 
 	// Show search info with active filters

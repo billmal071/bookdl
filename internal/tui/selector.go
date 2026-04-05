@@ -344,16 +344,20 @@ func (m *SelectorModel) updateDelegate() {
 	m.list.SetDelegate(delegate)
 }
 
-// openBrowser opens a URL in the default browser
-func openBrowser(url string) error {
+// openBrowser opens a URL in the default browser.
+// Only https:// URLs are allowed to prevent arbitrary protocol handler execution.
+func openBrowser(u string) error {
+	if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+		return fmt.Errorf("refusing to open non-HTTP URL: %s", u)
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", u)
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", u)
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
 	default:
 		return fmt.Errorf("unsupported platform")
 	}

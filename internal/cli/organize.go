@@ -146,8 +146,11 @@ func sanitizePathComponent(s string) string {
 	// Replace multiple spaces/underscores with single
 	s = regexp.MustCompile(`[\s_]+`).ReplaceAllString(s, " ")
 
-	// Trim whitespace
+	// Trim whitespace and reject path traversal
 	s = strings.TrimSpace(s)
+	if s == "." || s == ".." {
+		s = "_"
+	}
 
 	// Limit length
 	if len(s) > 80 {
