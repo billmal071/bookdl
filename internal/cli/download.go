@@ -161,6 +161,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 			if err := db.ResetDownload(existing.ID); err != nil {
 				return fmt.Errorf("failed to reset download: %w", err)
 			}
+			existing.Status = db.StatusPending
 		}
 	}
 
@@ -294,6 +295,10 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 			switch source {
 			case "zlibrary":
 				resolvedURL, err = zlibrary.NewBrowserClient(zlibrary.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
+			case "liber3":
+				// Liber3 uses IPFS links that typically don't need browser resolution,
+				// but if they do, use Anna's browser resolver as a generic fallback
+				resolvedURL, err = anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
 			default:
 				resolvedURL, err = anna.NewBrowserClient(anna.GetBaseURL()).ResolveDownloadURL(dlCtx, tryURL)
 			}
