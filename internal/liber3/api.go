@@ -13,9 +13,19 @@ import (
 )
 
 const (
-	apiBaseURL    = "https://lgate.glitternode.ru/v1"
-	ipfsGateway   = "https://ipfs.io/ipfs"
+	apiBaseURL = "https://lgate.glitternode.ru/v1"
 )
+
+// ipfsGateways is the list of IPFS gateways to try, in order.
+// Matches Liber3's Library3.supportedGateways.
+var ipfsGateways = []string{
+	"https://gateway-ipfs.st/ipfs",
+	"https://cloudflare-ipfs.com/ipfs",
+	"https://gateway.pinata.cloud/ipfs",
+	"https://dweb.link/ipfs",
+	"https://ipfs.fleek.co/ipfs",
+	"https://gateway.ipfs.io/ipfs",
+}
 
 // APIClient accesses Liber3 via its backend JSON API.
 type APIClient struct {
@@ -115,7 +125,7 @@ func (c *APIClient) SearchPage(ctx context.Context, query string, limit int, pag
 
 		var downloadURL string
 		if item.IPFSCID != "" {
-			downloadURL = fmt.Sprintf("%s/%s", ipfsGateway, item.IPFSCID)
+			downloadURL = fmt.Sprintf("%s/%s", ipfsGateways[0], item.IPFSCID)
 		}
 
 		books = append(books, &Book{
@@ -203,11 +213,14 @@ func (c *APIClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*Downl
 		return nil, fmt.Errorf("no IPFS CID available for this book")
 	}
 
-	downloadURL := fmt.Sprintf("%s/%s", ipfsGateway, item.IPFSCID)
-
 	info := &DownloadInfo{
-		DirectURL: downloadURL,
+		DirectURL: fmt.Sprintf("%s/%s", ipfsGateways[0], item.IPFSCID),
 		Filename:  fmt.Sprintf("%s.%s", sanitizeTitle(item.Title), strings.ToLower(item.Extension)),
+	}
+
+	// Add all gateways as mirrors for fallback
+	for _, gw := range ipfsGateways {
+		info.MirrorURLs = append(info.MirrorURLs, fmt.Sprintf("%s/%s", gw, item.IPFSCID))
 	}
 
 	return info, nil
