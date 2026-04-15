@@ -20,12 +20,12 @@ var silentLogger = log.New(io.Discard, "", 0)
 
 // browserPool manages a shared browser instance for reuse
 type browserPool struct {
-	mu sync.Mutex
-	allocCtx context.Context
+	mu          sync.Mutex
+	allocCtx    context.Context
 	allocCancel context.CancelFunc
-	browserCtx context.Context
-	cancelFunc context.CancelFunc
-	inUse bool
+	browserCtx  context.Context
+	cancelFunc  context.CancelFunc
+	inUse       bool
 }
 
 var sharedBrowserPool = &browserPool{}

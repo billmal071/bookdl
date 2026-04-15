@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/search"
 	"github.com/billmal071/bookdl/internal/tui"
+	"github.com/spf13/cobra"
 )
 
 var searchCmd = &cobra.Command{
@@ -89,24 +89,24 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		maxSize:  getString(cmd, "max-size"),
 	}
 
-		// Parse source option
-		sourceOpt = strings.ToLower(strings.TrimSpace(sourceOpt))
-		var searchOpt search.Option
-		switch sourceOpt {
-		case "anna":
-			searchOpt = search.OptionAnna
-			Printf("Searching Anna's Archive only\n")
-		case "zlibrary":
-			searchOpt = search.OptionZLibrary
-			Printf("Searching Z-Library only\n")
-		case "liber3":
-			searchOpt = search.OptionLiber3
-			Printf("Searching Liber3 only\n")
-		case "all", "":
-			searchOpt = search.OptionAll
-		default:
-			return fmt.Errorf("unknown source %q: must be all, anna, zlibrary, or liber3", sourceOpt)
-		}
+	// Parse source option
+	sourceOpt = strings.ToLower(strings.TrimSpace(sourceOpt))
+	var searchOpt search.Option
+	switch sourceOpt {
+	case "anna":
+		searchOpt = search.OptionAnna
+		Printf("Searching Anna's Archive only\n")
+	case "zlibrary":
+		searchOpt = search.OptionZLibrary
+		Printf("Searching Z-Library only\n")
+	case "liber3":
+		searchOpt = search.OptionLiber3
+		Printf("Searching Liber3 only\n")
+	case "all", "":
+		searchOpt = search.OptionAll
+	default:
+		return fmt.Errorf("unknown source %q: must be all, anna, zlibrary, or liber3", sourceOpt)
+	}
 
 	// Show search info with active filters
 	Printf("Searching for: %s\n", query)

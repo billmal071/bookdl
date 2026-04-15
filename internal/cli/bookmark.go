@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/db"
+	"github.com/spf13/cobra"
 )
 
 var bookmarkCmd = &cobra.Command{
@@ -168,10 +168,10 @@ func addBookmark(ctx context.Context, md5Hash string, note string) error {
 
 	// Create bookmark with available info
 	bookmark := &db.Bookmark{
-		MD5Hash:  md5Hash,
-		Title:    info.Filename,
-		PageURL:  fmt.Sprintf("https://%s/md5/%s", anna.GetBaseURL(), md5Hash),
-		Notes:    note,
+		MD5Hash: md5Hash,
+		Title:   info.Filename,
+		PageURL: fmt.Sprintf("https://%s/md5/%s", anna.GetBaseURL(), md5Hash),
+		Notes:   note,
 	}
 
 	// If filename is empty, use MD5

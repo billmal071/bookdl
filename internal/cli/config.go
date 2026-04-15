@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{

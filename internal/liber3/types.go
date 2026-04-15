@@ -4,15 +4,15 @@ import "context"
 
 // Book represents a book from Liber3
 type Book struct {
-	MD5Hash   string `json:"md5"`
-	Title     string `json:"title"`
-	Authors   string `json:"authors"`
-	Publisher string `json:"publisher"`
-	Year      string `json:"year"`
-	Language  string `json:"language"`
-	Format    string `json:"format"`
-	Size      string `json:"size"`
-	SizeBytes int64  `json:"size_bytes"`
+	MD5Hash     string `json:"md5"`
+	Title       string `json:"title"`
+	Authors     string `json:"authors"`
+	Publisher   string `json:"publisher"`
+	Year        string `json:"year"`
+	Language    string `json:"language"`
+	Format      string `json:"format"`
+	Size        string `json:"size"`
+	SizeBytes   int64  `json:"size_bytes"`
 	PageURL     string `json:"page_url"`
 	DownloadURL string `json:"download_url,omitempty"`
 	Source      string `json:"source"` // "liber3"

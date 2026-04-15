@@ -7,9 +7,9 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/billmal071/bookdl/internal/anna"
 )
 
 func truncateMD5(hash string) string {
@@ -388,7 +388,7 @@ func (m SelectorModel) renderDetailsView() string {
 	// Publisher
 	if book.Publisher != "" {
 		sb.WriteString(LabelStyle.Render("Publisher:"))
-		sb.WriteString(ValueStyle.Render(" " + book.Publisher) + "\n")
+		sb.WriteString(ValueStyle.Render(" "+book.Publisher) + "\n")
 	}
 
 	// Year

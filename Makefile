@@ -1,4 +1,4 @@
-.PHONY: build install clean test run
+.PHONY: build install clean test run deps fmt lint ci ci-format ci-vet ci-test ci-build
 
 # Go binary path (adjust if go is in a different location)
 GO=$(shell which go 2>/dev/null || echo "/usr/local/go/bin/go")
@@ -51,6 +51,35 @@ fmt:
 lint:
 	golangci-lint run
 
+# CI targets
+ci: ci-format ci-vet ci-test ci-build
+	@echo "✅ All CI checks passed!"
+
+ci-format:
+	@echo "Checking formatting..."
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ The following files are not formatted:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	@echo "✅ Format check passed"
+
+ci-vet:
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "✅ Vet passed"
+
+ci-test:
+	@echo "Running tests..."
+	@go test -v ./...
+	@echo "✅ Tests passed"
+
+ci-build:
+	@echo "Building..."
+	@CGO_ENABLED=0 go build -o /dev/null ./cmd/bookdl
+	@echo "✅ Build passed"
+
 # Build for multiple platforms
 build-all: build-linux build-darwin build-windows
 
@@ -67,12 +96,17 @@ build-windows:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  build       - Build the binary"
-	@echo "  install     - Install to GOPATH/bin"
-	@echo "  clean       - Remove build artifacts"
-	@echo "  test        - Run tests"
-	@echo "  run         - Run the application (use ARGS= for arguments)"
-	@echo "  deps        - Fetch dependencies"
-	@echo "  fmt         - Format code"
-	@echo "  lint        - Run linter"
-	@echo "  build-all   - Build for all platforms"
+	@echo "  build        - Build the binary"
+	@echo "  install      - Install to GOPATH/bin"
+	@echo "  clean        - Remove build artifacts"
+	@echo "  test         - Run tests"
+	@echo "  run          - Run the application (use ARGS= for arguments)"
+	@echo "  deps         - Fetch dependencies"
+	@echo "  fmt          - Format code"
+	@echo "  lint         - Run linter"
+	@echo "  build-all    - Build for all platforms"
+	@echo "  ci           - Run all CI checks (format, vet, test, build)"
+	@echo "  ci-format    - Check code formatting"
+	@echo "  ci-vet       - Run go vet"
+	@echo "  ci-test      - Run tests"
+	@echo "  ci-build     - Test build"

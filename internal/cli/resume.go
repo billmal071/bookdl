@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
 	"github.com/billmal071/bookdl/internal/notify"
+	"github.com/spf13/cobra"
 )
 
 var resumeCmd = &cobra.Command{
