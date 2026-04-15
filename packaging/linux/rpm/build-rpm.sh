@@ -18,8 +18,6 @@ fi
 # Strip 'v' prefix if present for RPM version
 VERSION=${VERSION#v}
 
-# Strip 'v' prefix if present for RPM version
-
 # Create RPM build directories
 TOP_DIR=$(mktemp -d)
 mkdir -p "$TOP_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -35,6 +33,13 @@ cp "$BINARY_PATH" "$TOP_DIR/SOURCES/bookdl-linux-$ARCH"
 
 # Copy spec file
 cp packaging/linux/rpm/bookdl.spec "$TOP_DIR/SPECS/"
+
+# Ensure target platform is defined for cross-arch builds (e.g. aarch64 on x86_64 Ubuntu)
+PLATFORM_DIR="/usr/lib/rpm/platform/${ARCH}-linux"
+if [ ! -d "$PLATFORM_DIR" ]; then
+    sudo mkdir -p "$PLATFORM_DIR"
+    echo "%_target_cpu $ARCH" | sudo tee "$PLATFORM_DIR/macros" > /dev/null
+fi
 
 # Build RPM
 rpmbuild --define "_topdir $TOP_DIR" \
