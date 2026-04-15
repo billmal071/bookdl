@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build and Release
+  build-binaries:
+    name: Build Binaries
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -54,18 +54,109 @@ jobs:
           cd release
           sha256sum * > SHA256SUMS
 
-      - name: Create release
-        uses: softprops/action-gh-release@v1
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
         with:
-          files: release/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: binaries
+          path: release/
 
-      - name: Create checksums
+  build-macos-installer:
+    name: Build macOS Installer
+    runs-on: macos-latest
+    needs: build-binaries
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: release/
+
+      - name: Get version
+        id: get_version
+        env:
+          REF: ${{ github.ref }}
+        run: echo "VERSION=${REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build .pkg installers
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          chmod +x release/bookdl-darwin-*
+          ./packaging/macos/build-pkg.sh "$VERSION" release/bookdl-darwin-amd64
+          mv bookdl-*.pkg release/ || true
+
+      - name: Upload macOS installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: release/*.pkg
+
+  build-linux-packages:
+    name: Build Linux Packages
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: release/
+
+      - name: Get version
+        id: get_version
+        env:
+          REF: ${{ github.ref }}
+        run: echo "VERSION=${REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build .deb packages
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          chmod +x release/bookdl-linux-*
+          ./packaging/linux/debian/build-deb.sh "$VERSION" amd64 release/bookdl-linux-amd64
+          ./packaging/linux/debian/build-deb.sh "$VERSION" arm64 release/bookdl-linux-arm64
+          mv *.deb release/ || true
+
+      - name: Build .rpm packages
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          sudo apt-get install -y rpm
+          ./packaging/linux/rpm/build-rpm.sh "$VERSION" x86_64 release/bookdl-linux-amd64
+          ./packaging/linux/rpm/build-rpm.sh "$VERSION" aarch64 release/bookdl-linux-arm64
+          mv *.rpm release/ || true
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            release/*.deb
+            release/*.rpm
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries, build-macos-installer, build-linux-packages]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release/
+
+      - name: Prepare release assets
         run: |
           cd release
-          sha256sum * > SHA256SUMS
+          # Flatten directory structure
+          find . -type f -exec mv {} . \; || true
+          # Remove empty directories
+          find . -type d -empty -delete || true
 
       - name: Create release
         uses: softprops/action-gh-release@v1
