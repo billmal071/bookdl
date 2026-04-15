@@ -43,13 +43,13 @@ type Download struct {
 
 // Chunk represents a download chunk for resumable downloads
 type Chunk struct {
-	ID          int64
-	DownloadID  int64
-	ChunkIndex  int
-	StartByte   int64
-	EndByte     int64
-	Downloaded  int64
-	Status      string
+	ID         int64
+	DownloadID int64
+	ChunkIndex int
+	StartByte  int64
+	EndByte    int64
+	Downloaded int64
+	Status     string
 }
 
 // CreateDownload creates a new download record

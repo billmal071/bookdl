@@ -75,10 +75,10 @@ var (
 
 	// Details box style
 	DetailsBoxStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(primaryColor).
-				Padding(1, 2).
-				MarginTop(1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryColor).
+			Padding(1, 2).
+			MarginTop(1)
 )
 
 // FormatSize formats bytes into human readable format

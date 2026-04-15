@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gocolly/colly/v2"
 	"github.com/billmal071/bookdl/internal/config"
+	"github.com/gocolly/colly/v2"
 )
 
 var (

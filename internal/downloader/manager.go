@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/schollz/progressbar/v3"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
+	"github.com/schollz/progressbar/v3"
 )
 
 const (

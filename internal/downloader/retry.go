@@ -50,15 +50,15 @@ func CategorizeError(err error, statusCode int) ErrorCategory {
 	case http.StatusTooManyRequests: // 429
 		return ErrorRateLimited
 	case http.StatusBadRequest, // 400
-		http.StatusUnauthorized,        // 401
-		http.StatusForbidden,           // 403
-		http.StatusNotFound,            // 404
-		http.StatusMethodNotAllowed,    // 405
-		http.StatusGone,                // 410
+		http.StatusUnauthorized,          // 401
+		http.StatusForbidden,             // 403
+		http.StatusNotFound,              // 404
+		http.StatusMethodNotAllowed,      // 405
+		http.StatusGone,                  // 410
 		http.StatusRequestEntityTooLarge: // 413
 		return ErrorNonRetryable
 	case http.StatusInternalServerError, // 500
-		http.StatusBadGateway,      // 502
+		http.StatusBadGateway,         // 502
 		http.StatusServiceUnavailable, // 503
 		http.StatusGatewayTimeout:     // 504
 		return ErrorRetryable
