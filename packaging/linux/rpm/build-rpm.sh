@@ -19,7 +19,6 @@ fi
 VERSION=${VERSION#v}
 
 # Strip 'v' prefix if present for RPM version
-VERSION=${VERSION#v}
 
 # Create RPM build directories
 TOP_DIR=$(mktemp -d)
@@ -27,6 +26,9 @@ mkdir -p "$TOP_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # Update spec file with version
 sed -i "s/^Version:.*/Version:        $VERSION/" packaging/linux/rpm/bookdl.spec
+
+sed -i "s/^Source0:.*/Source0: bookdl-linux-$ARCH/" packaging/linux/rpm/bookdl.spec
+sed -i "s/^BuildArch:.*/BuildArch: $ARCH/" packaging/linux/rpm/bookdl.spec
 
 # Copy binary to SOURCES
 cp "$BINARY_PATH" "$TOP_DIR/SOURCES/bookdl-linux-$ARCH"
