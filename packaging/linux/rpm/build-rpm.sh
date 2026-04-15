@@ -34,20 +34,16 @@ cp "$BINARY_PATH" "$TOP_DIR/SOURCES/bookdl-linux-$ARCH"
 # Copy spec file
 cp packaging/linux/rpm/bookdl.spec "$TOP_DIR/SPECS/"
 
-# Ensure target platform is defined for cross-arch builds (e.g. aarch64 on x86_64 Ubuntu)
-PLATFORM_DIR="/usr/lib/rpm/platform/${ARCH}-linux"
-if [ ! -d "$PLATFORM_DIR" ]; then
-    sudo mkdir -p "$PLATFORM_DIR"
-    echo "%_target_cpu $ARCH" | sudo tee "$PLATFORM_DIR/macros" > /dev/null
-fi
-
-# Build RPM
+# Build RPM — use --define instead of --target to avoid missing platform errors
+# on Ubuntu runners that lack aarch64 platform definitions
 rpmbuild --define "_topdir $TOP_DIR" \
-         --target "$ARCH" \
+         --define "_target_cpu $ARCH" \
+         --define "_arch $ARCH" \
+         --define "_rpmdir $TOP_DIR/RPMS" \
          -bb "$TOP_DIR/SPECS/bookdl.spec"
 
 # Copy RPM to current directory
-cp "$TOP_DIR/RPMS/$ARCH/"*.rpm .
+cp "$TOP_DIR/RPMS/$ARCH/"*.rpm . 2>/dev/null || cp "$TOP_DIR/RPMS/"*.rpm . 2>/dev/null || cp "$TOP_DIR/RPMS/"**/*.rpm .
 
 # Cleanup
 rm -rf "$TOP_DIR"
