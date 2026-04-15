@@ -15,6 +15,9 @@ if [ -z "$VERSION" ] || [ -z "$ARCH" ] || [ -z "$BINARY_PATH" ]; then
     exit 1
 fi
 
+# Strip 'v' prefix if present for Debian version
+VERSION=${VERSION#v}
+
 # Create package structure
 PKG_DIR=$(mktemp -d)
 PACKAGE_NAME="bookdl_${VERSION}_${ARCH}"
