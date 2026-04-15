@@ -49,30 +49,18 @@ jobs:
           # Windows amd64
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-X github.com/billmal071/bookdl/internal/cli.Version=${VERSION} -X github.com/billmal071/bookdl/internal/cli.Commit=${COMMIT}" -o release/bookdl-windows-amd64.exe ./cmd/bookdl
 
-      - name: Build macOS .pkg installer
-        env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+      - name: Create checksums
         run: |
           cd release
-          ../packaging/macos/build-pkg.sh "$VERSION" bookdl-darwin-amd64
-          ../packaging/macos/build-pkg.sh "$VERSION" bookdl-darwin-arm64
+          sha256sum * > SHA256SUMS
 
-      - name: Build Windows installer
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
         env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
-        run: |
-          # Note: This requires Inno Setup to be installed
-          # For GitHub Actions, we'll just provide the binary
-          # Users can use the binary or the PowerShell install script
-          echo "Windows installer requires Inno Setup - providing binary instead"
-
-      - name: Build Linux .deb package
-        env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
-        run: |
-          cd release
-          ../packaging/linux/debian/build-deb.sh "$VERSION" amd64 bookdl-linux-amd64
-          ../packaging/linux/debian/build-deb.sh "$VERSION" arm64 bookdl-linux-arm64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create checksums
         run: |
