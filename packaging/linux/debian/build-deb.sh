@@ -18,6 +18,9 @@ fi
 # Strip 'v' prefix if present for Debian version
 VERSION=${VERSION#v}
 
+# Strip 'v' prefix if present for Debian version
+VERSION=${VERSION#v}
+
 # Create package structure
 PKG_DIR=$(mktemp -d)
 PACKAGE_NAME="bookdl_${VERSION}_${ARCH}"
