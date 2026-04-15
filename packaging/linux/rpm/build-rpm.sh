@@ -38,10 +38,12 @@ sed -i "s/^BuildArch:.*/BuildArch: noarch/" "$SPEC"
 # Copy binary to SOURCES
 cp "$BINARY_PATH" "$TOP_DIR/SOURCES/bookdl-linux-$ARCH"
 
-# Build RPM — disable check-buildroot and arch-dependent-binary checks
-# since we're packaging a pre-built cross-compiled binary
+# Build RPM with cross-arch workarounds:
+# - noarch + _binaries_in_noarch_packages_terminate_build: allows ELF in noarch
+# - __os_install_post nil: disables brp-strip which fails on foreign-arch ELF
 rpmbuild --define "_topdir $TOP_DIR" \
          --define "_binaries_in_noarch_packages_terminate_build 0" \
+         --define "__os_install_post %{nil}" \
          -bb "$SPEC"
 
 # Rename noarch RPM to target architecture
