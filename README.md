@@ -14,6 +14,46 @@ A command-line tool for searching and downloading books from multiple sources: A
 
 ## Installation
 
+**📖 For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+
+### Quick Install (Recommended)
+
+**macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/billmal071/bookdl/main/scripts/install-mac.sh | bash
+```
+
+**Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/billmal071/bookdl/main/scripts/install-linux.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/billmal071/bookdl/main/scripts/install-windows.ps1 | iex
+```
+
+### Download Binary
+
+Download the latest release for your platform from the [Releases page](https://github.com/billmal071/bookdl/releases/latest):
+
+- **macOS (Intel):** `bookdl-darwin-amd64`
+- **macOS (Apple Silicon):** `bookdl-darwin-arm64`
+- **Linux (x86_64):** `bookdl-linux-amd64`
+- **Linux (ARM64):** `bookdl-linux-arm64`
+- **Windows:** `bookdl-windows-amd64.exe`
+
+After downloading:
+1. Make the binary executable (macOS/Linux): `chmod +x bookdl-*`
+2. Move it to a directory in your PATH: `sudo mv bookdl-* /usr/local/bin/bookdl`
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap billmal071/bookdl
+brew install bookdl
+```
+
 ### From Source
 
 ```bash
@@ -30,7 +70,7 @@ make install
 
 ### Requirements
 
-- Go 1.21 or later
+- Go 1.21 or later (for building from source only)
 - Chrome/Chromium (for Cloudflare bypass, optional)
 
 ## Usage
