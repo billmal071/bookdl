@@ -22,30 +22,36 @@ VERSION=${VERSION#v}
 TOP_DIR=$(mktemp -d)
 mkdir -p "$TOP_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-# Update spec file with version
-sed -i "s/^Version:.*/Version:        $VERSION/" packaging/linux/rpm/bookdl.spec
+# Work on a copy of the spec to avoid mutating the repo
+cp packaging/linux/rpm/bookdl.spec "$TOP_DIR/SPECS/bookdl.spec"
+SPEC="$TOP_DIR/SPECS/bookdl.spec"
 
-sed -i "s/^Source0:.*/Source0: bookdl-linux-$ARCH/" packaging/linux/rpm/bookdl.spec
-sed -i "s/^BuildArch:.*/BuildArch: $ARCH/" packaging/linux/rpm/bookdl.spec
+# Update spec with version and source
+sed -i "s/^Version:.*/Version:        $VERSION/" "$SPEC"
+sed -i "s/^Source0:.*/Source0: bookdl-linux-$ARCH/" "$SPEC"
+
+# Use noarch to avoid rpmbuild's platform validation failing on cross-arch
+# builds (e.g. building aarch64 RPM on x86_64 Ubuntu runner).
+# We rename the output RPM to the correct arch afterwards.
+sed -i "s/^BuildArch:.*/BuildArch: noarch/" "$SPEC"
 
 # Copy binary to SOURCES
 cp "$BINARY_PATH" "$TOP_DIR/SOURCES/bookdl-linux-$ARCH"
 
-# Copy spec file
-cp packaging/linux/rpm/bookdl.spec "$TOP_DIR/SPECS/"
-
-# Build RPM — use --define instead of --target to avoid missing platform errors
-# on Ubuntu runners that lack aarch64 platform definitions
+# Build RPM
 rpmbuild --define "_topdir $TOP_DIR" \
-         --define "_target_cpu $ARCH" \
-         --define "_arch $ARCH" \
-         --define "_rpmdir $TOP_DIR/RPMS" \
-         -bb "$TOP_DIR/SPECS/bookdl.spec"
+         -bb "$SPEC"
 
-# Copy RPM to current directory
-cp "$TOP_DIR/RPMS/$ARCH/"*.rpm . 2>/dev/null || cp "$TOP_DIR/RPMS/"*.rpm . 2>/dev/null || cp "$TOP_DIR/RPMS/"**/*.rpm .
+# Rename noarch RPM to target architecture
+NOARCH_RPM=$(find "$TOP_DIR/RPMS" -name "*.noarch.rpm" | head -1)
+FINAL_NAME="bookdl-${VERSION}-1.${ARCH}.rpm"
+if [ -n "$NOARCH_RPM" ]; then
+    cp "$NOARCH_RPM" "./$FINAL_NAME"
+else
+    find "$TOP_DIR/RPMS" -name "*.rpm" -exec cp {} . \;
+fi
 
 # Cleanup
 rm -rf "$TOP_DIR"
 
-echo "Package created: bookdl-${VERSION}-1.${ARCH}.rpm"
+echo "Package created: $FINAL_NAME"
