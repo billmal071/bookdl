@@ -15,6 +15,9 @@ if [ -z "$VERSION" ] || [ -z "$ARCH" ] || [ -z "$BINARY_PATH" ]; then
     exit 1
 fi
 
+# Strip 'v' prefix if present for RPM version
+VERSION=${VERSION#v}
+
 # Create RPM build directories
 TOP_DIR=$(mktemp -d)
 mkdir -p "$TOP_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
