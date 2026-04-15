@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/db"
+	"github.com/spf13/cobra"
 )
 
 var historyCmd = &cobra.Command{

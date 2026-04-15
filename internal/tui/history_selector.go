@@ -5,9 +5,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/billmal071/bookdl/internal/db"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/billmal071/bookdl/internal/db"
 )
 
 // HistoryItem wraps a SearchHistory for the list component

@@ -4,15 +4,15 @@ import "context"
 
 // Book represents a book from Anna's Archive
 type Book struct {
-	MD5Hash   string `json:"md5"`
-	Title     string `json:"title"`
-	Authors   string `json:"authors"`
-	Publisher string `json:"publisher"`
-	Year      string `json:"year"`
-	Language  string `json:"language"`
-	Format    string `json:"format"`
-	Size      string `json:"size"`
-	SizeBytes int64  `json:"size_bytes"`
+	MD5Hash     string `json:"md5"`
+	Title       string `json:"title"`
+	Authors     string `json:"authors"`
+	Publisher   string `json:"publisher"`
+	Year        string `json:"year"`
+	Language    string `json:"language"`
+	Format      string `json:"format"`
+	Size        string `json:"size"`
+	SizeBytes   int64  `json:"size_bytes"`
 	PageURL     string `json:"page_url"`
 	DownloadURL string `json:"download_url,omitempty"` // Direct download path (e.g. Z-Library /dl/...)
 	Source      string `json:"source"`                 // "anna", "zlibrary", or "liber3"
@@ -27,10 +27,10 @@ type SearchResult struct {
 
 // DownloadInfo contains information needed to download a book
 type DownloadInfo struct {
-	DirectURL  string `json:"direct_url"`
+	DirectURL  string   `json:"direct_url"`
 	MirrorURLs []string `json:"mirror_urls"`
-	Filename   string `json:"filename"`
-	FileSize   int64  `json:"file_size"`
+	Filename   string   `json:"filename"`
+	FileSize   int64    `json:"file_size"`
 }
 
 // Client defines the interface for Anna's Archive access

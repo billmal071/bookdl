@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
+	"github.com/spf13/cobra"
 )
 
 var pauseCmd = &cobra.Command{

@@ -41,45 +41,45 @@ type Liber3Config struct {
 
 // DownloadConfig holds download settings
 type DownloadConfig struct {
-	Path             string        `mapstructure:"path"`
-	ChunkSize        int64         `mapstructure:"chunk_size"`
-	MaxConcurrent    int           `mapstructure:"max_concurrent"`
-	Timeout          time.Duration `mapstructure:"timeout"`
-	AutoResume       bool          `mapstructure:"auto_resume"`
-	Notifications    bool          `mapstructure:"notifications"`
-	SoundEnabled     bool          `mapstructure:"sound_enabled"`
+	Path          string        `mapstructure:"path"`
+	ChunkSize     int64         `mapstructure:"chunk_size"`
+	MaxConcurrent int           `mapstructure:"max_concurrent"`
+	Timeout       time.Duration `mapstructure:"timeout"`
+	AutoResume    bool          `mapstructure:"auto_resume"`
+	Notifications bool          `mapstructure:"notifications"`
+	SoundEnabled  bool          `mapstructure:"sound_enabled"`
 }
 
 // FileConfig holds file preferences
 type FileConfig struct {
 	PreferredFormats []string `mapstructure:"preferred_formats"`
-	OrganizeMode     string   `mapstructure:"organize_mode"`     // flat, author, format, year, custom
-	OrganizePattern  string   `mapstructure:"organize_pattern"`  // custom pattern like {author}/{year}/{title}
-	RenameFiles      bool     `mapstructure:"rename_files"`      // rename files based on metadata
+	OrganizeMode     string   `mapstructure:"organize_mode"`    // flat, author, format, year, custom
+	OrganizePattern  string   `mapstructure:"organize_pattern"` // custom pattern like {author}/{year}/{title}
+	RenameFiles      bool     `mapstructure:"rename_files"`     // rename files based on metadata
 }
 
 // NetworkConfig holds network settings
 type NetworkConfig struct {
-	Timeout           time.Duration `mapstructure:"timeout"`
-	RetryAttempts     int           `mapstructure:"retry_attempts"`
-	RetryBaseDelay    time.Duration `mapstructure:"retry_base_delay"`
-	RetryMaxDelay     time.Duration `mapstructure:"retry_max_delay"`
-	RetryMultiplier   float64       `mapstructure:"retry_multiplier"`
-	UserAgent         string        `mapstructure:"user_agent"`
+	Timeout         time.Duration `mapstructure:"timeout"`
+	RetryAttempts   int           `mapstructure:"retry_attempts"`
+	RetryBaseDelay  time.Duration `mapstructure:"retry_base_delay"`
+	RetryMaxDelay   time.Duration `mapstructure:"retry_max_delay"`
+	RetryMultiplier float64       `mapstructure:"retry_multiplier"`
+	UserAgent       string        `mapstructure:"user_agent"`
 }
 
 // BrowserConfig holds browser automation settings
 type BrowserConfig struct {
-	PageLoadTimeout     time.Duration `mapstructure:"page_load_timeout"`      // Timeout for initial page load
-	MaxCountdownWait    time.Duration `mapstructure:"max_countdown_wait"`     // Max time to wait for download countdown
-	PollInterval        time.Duration `mapstructure:"poll_interval"`          // How often to check for download link
-	VerboseLogging      bool          `mapstructure:"verbose_logging"`        // Enable detailed logging
+	PageLoadTimeout  time.Duration `mapstructure:"page_load_timeout"`  // Timeout for initial page load
+	MaxCountdownWait time.Duration `mapstructure:"max_countdown_wait"` // Max time to wait for download countdown
+	PollInterval     time.Duration `mapstructure:"poll_interval"`      // How often to check for download link
+	VerboseLogging   bool          `mapstructure:"verbose_logging"`    // Enable detailed logging
 }
 
 // CacheConfig holds cache settings
 type CacheConfig struct {
-	Enabled bool          `mapstructure:"enabled"`  // Enable search result caching
-	TTL     time.Duration `mapstructure:"ttl"`      // Time-to-live for cached results
+	Enabled bool          `mapstructure:"enabled"` // Enable search result caching
+	TTL     time.Duration `mapstructure:"ttl"`     // Time-to-live for cached results
 }
 
 var cfg *Config

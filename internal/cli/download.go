@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
 	"github.com/billmal071/bookdl/internal/downloader"
-	"github.com/billmal071/bookdl/internal/notify"
 	"github.com/billmal071/bookdl/internal/liber3"
+	"github.com/billmal071/bookdl/internal/notify"
 	"github.com/billmal071/bookdl/internal/zlibrary"
+	"github.com/spf13/cobra"
 )
 
 var downloadCmd = &cobra.Command{

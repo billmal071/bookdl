@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/chromedp/chromedp"
 	"github.com/billmal071/bookdl/internal/config"
+	"github.com/chromedp/chromedp"
 )
 
 // silentLogger discards all log output
