@@ -144,14 +144,10 @@ func (c *ScraperClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 	collector.OnHTML("body", func(e *colly.HTMLElement) {
 		info = &DownloadInfo{}
 
-		// First priority: slow download links (these lead to IPFS downloads)
-		// These are the best option for direct HTTP downloads
-		e.ForEach("a[href*='/slow_download/']", func(_ int, el *colly.HTMLElement) {
+		// First priority: LibGen/library.lol links (direct HTTP downloads, no captcha)
+		e.ForEach("a[href*='libgen.li/file.php'], a[href*='library.lol'], a[href*='libgen.is'], a[href*='libgen.rs'], a[href*='libgen.st']", func(_ int, el *colly.HTMLElement) {
 			href := el.Attr("href")
-			if href != "" && !strings.Contains(href, "?") {
-				if !strings.HasPrefix(href, "http") {
-					href = fmt.Sprintf("https://%s%s", c.baseURL, href)
-				}
+			if href != "" {
 				if info.DirectURL == "" {
 					info.DirectURL = href
 				}
@@ -159,10 +155,10 @@ func (c *ScraperClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 			}
 		})
 
-		// Also add slow_download links with query params as mirrors
+		// Second priority: slow download links (may be behind captcha)
 		e.ForEach("a[href*='/slow_download/']", func(_ int, el *colly.HTMLElement) {
 			href := el.Attr("href")
-			if href != "" && strings.Contains(href, "?") {
+			if href != "" {
 				if !strings.HasPrefix(href, "http") {
 					href = fmt.Sprintf("https://%s%s", c.baseURL, href)
 				}
@@ -170,21 +166,13 @@ func (c *ScraperClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 			}
 		})
 
-		// Second priority: fast download links (requires account, but add as mirror)
+		// Third priority: fast download links (requires account)
 		e.ForEach("a[href*='/fast_download/']", func(_ int, el *colly.HTMLElement) {
 			href := el.Attr("href")
 			if href != "" && !strings.Contains(href, "javascript") {
 				if !strings.HasPrefix(href, "http") {
 					href = fmt.Sprintf("https://%s%s", c.baseURL, href)
 				}
-				info.MirrorURLs = append(info.MirrorURLs, href)
-			}
-		})
-
-		// Third priority: LibGen links (add as fallback mirrors)
-		e.ForEach("a[href*='libgen.li/file.php'], a[href*='library.lol']", func(_ int, el *colly.HTMLElement) {
-			href := el.Attr("href")
-			if href != "" {
 				info.MirrorURLs = append(info.MirrorURLs, href)
 			}
 		})

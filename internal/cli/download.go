@@ -78,8 +78,8 @@ func detectSource(id string) (string, error) {
 	return "anna", nil
 }
 
-// getDownloadInfoForSource fetches download info from the appropriate source client.
-func getDownloadInfoForSource(ctx context.Context, bookID string, source string) (*anna.DownloadInfo, error) {
+// GetDownloadInfoForSource fetches download info from the appropriate source client.
+func GetDownloadInfoForSource(ctx context.Context, bookID string, source string) (*anna.DownloadInfo, error) {
 	switch source {
 	case "zlibrary":
 		zClient := zlibrary.NewClient()
@@ -170,7 +170,10 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		fmt.Printf("Fetching book information...\n")
 		switch source {
 		case "zlibrary":
-			// Z-Library doesn't support search-by-ID well, skip
+			// Z-Library requires login to access book pages and doesn't support
+			// search by numeric ID. The download URL is only available from
+			// the z-bookcard element's download attribute during interactive search.
+			// Direct download by ID is not supported.
 		default:
 			client := anna.NewClient()
 			books, err := client.Search(ctx, md5Hash, 1)
@@ -189,7 +192,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	} else {
 		fmt.Printf("Getting download links from %s...\n", source)
 		var err error
-		dlInfo, err = getDownloadInfoForSource(ctx, md5Hash, source)
+		dlInfo, err = GetDownloadInfoForSource(ctx, md5Hash, source)
 		if err != nil {
 			return fmt.Errorf("failed to get download info: %w", err)
 		}
@@ -234,6 +237,7 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		Authors:   getAuthors(bookInfo),
 		Format:    getFormat(bookInfo),
 		SourceURL: buildSourceURL(source, md5Hash),
+		Source:    source,
 		FilePath:  filePath,
 		TempPath:  tempPath,
 		Status:    db.StatusPending,
@@ -284,7 +288,9 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		// URLs that need browser resolution (cookies/session/countdown)
 		needsBrowser := strings.Contains(tryURL, "/slow_download/") ||
 			strings.Contains(tryURL, "/fast_download/") ||
-			strings.Contains(tryURL, "/dl/")
+			strings.Contains(tryURL, "/dl/") ||
+			strings.Contains(tryURL, "libgen.li/file.php") ||
+			strings.Contains(tryURL, "library.lol")
 
 		if needsBrowser {
 			if i > 0 {

@@ -219,6 +219,19 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 		return "", fmt.Errorf("browser navigation failed: %w", err)
 	}
 
+	// Check for DDoS-Guard / hCaptcha before wasting time polling
+	var initialHTML string
+	if err := chromedp.Run(browserCtx, chromedp.OuterHTML("html", &initialHTML)); err == nil {
+		lowerHTML := strings.ToLower(initialHTML)
+		if strings.Contains(lowerHTML, "ddos-guard") || strings.Contains(lowerHTML, "h-captcha") ||
+			strings.Contains(lowerHTML, "hcaptcha") {
+			if cfg.Browser.VerboseLogging {
+				fmt.Println("[Browser] DDoS-Guard/hCaptcha detected, skipping this mirror")
+			}
+			return "", fmt.Errorf("page blocked by captcha (DDoS-Guard/hCaptcha)")
+		}
+	}
+
 	if cfg.Browser.VerboseLogging {
 		fmt.Println("[Browser] Page loaded, waiting for download link...")
 	}
@@ -345,6 +358,11 @@ func extractDownloadURL(html string, baseURL string) string {
 
 		hrefLower := strings.ToLower(href)
 
+		// Skip .onion URLs (require Tor)
+		if strings.Contains(hrefLower, ".onion") {
+			return
+		}
+
 		// Skip internal Anna's Archive navigation links
 		if strings.Contains(hrefLower, "/slow_download/") ||
 			strings.Contains(hrefLower, "/fast_download/") ||
@@ -398,10 +416,11 @@ func extractDownloadURL(html string, baseURL string) string {
 
 			hrefLower := strings.ToLower(href)
 
-			// Skip internal links
+			// Skip internal links and .onion URLs
 			if strings.Contains(hrefLower, "/slow_download/") ||
 				strings.Contains(hrefLower, "/fast_download/") ||
-				strings.Contains(hrefLower, "/account/") {
+				strings.Contains(hrefLower, "/account/") ||
+				strings.Contains(hrefLower, ".onion") {
 				return
 			}
 
