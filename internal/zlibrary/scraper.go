@@ -3,12 +3,8 @@ package zlibrary
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
-	"time"
 
 	"github.com/billmal071/bookdl/internal/config"
-	"github.com/gocolly/colly/v2"
 )
 
 var (
@@ -52,69 +48,10 @@ func (c *ScraperClient) SearchPage(ctx context.Context, query string, limit int,
 }
 
 // GetDownloadInfo retrieves download links for a book.
-// Attempts a lightweight HTTP scrape first; falls back to browser on Cloudflare or empty results.
+// Z-Library requires login to show download links on book detail pages and
+// uses Web Components (z-bookcard) that need a real browser to render.
+// We delegate directly to the browser client which extracts download URLs
+// from search results without authentication.
 func (c *ScraperClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
-	var info *DownloadInfo
-	var cloudflareDetected bool
-
-	collector := colly.NewCollector(
-		colly.AllowedDomains(c.baseURL),
-		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-	)
-
-	collector.SetRequestTimeout(30 * time.Second)
-
-	collector.OnResponse(func(r *colly.Response) {
-		body := string(r.Body)
-		if strings.Contains(body, "cf-browser-verification") ||
-			strings.Contains(body, "Just a moment...") {
-			cloudflareDetected = true
-		}
-	})
-
-	collector.OnHTML("body", func(e *colly.HTMLElement) {
-		info = &DownloadInfo{}
-
-		e.ForEach("a[href*='download'], .download-btn a", func(_ int, el *colly.HTMLElement) {
-			href := el.Attr("href")
-			if href != "" && !strings.Contains(href, "javascript") {
-				if !strings.HasPrefix(href, "http") {
-					href = fmt.Sprintf("https://%s%s", c.baseURL, href)
-				}
-				if info.DirectURL == "" {
-					info.DirectURL = href
-				}
-				info.MirrorURLs = append(info.MirrorURLs, href)
-			}
-		})
-
-		e.ForEach("a[href*='.pdf'], a[href*='.epub'], a[href*='.mobi']", func(_ int, el *colly.HTMLElement) {
-			href := el.Attr("href")
-			if href != "" && strings.HasPrefix(href, "http") {
-				info.MirrorURLs = append(info.MirrorURLs, href)
-			}
-		})
-
-		if info.DirectURL == "" && len(info.MirrorURLs) > 0 {
-			info.DirectURL = info.MirrorURLs[0]
-		}
-	})
-
-	pageURL := fmt.Sprintf("https://%s/book/%s", c.baseURL, md5Hash)
-	err := collector.Visit(pageURL)
-	if err != nil {
-		return c.browser.GetDownloadInfo(ctx, md5Hash)
-	}
-
-	collector.Wait()
-
-	if cloudflareDetected {
-		return c.browser.GetDownloadInfo(ctx, md5Hash)
-	}
-
-	if info == nil || (info.DirectURL == "" && len(info.MirrorURLs) == 0) {
-		return c.browser.GetDownloadInfo(ctx, md5Hash)
-	}
-
-	return info, nil
+	return c.browser.GetDownloadInfo(ctx, md5Hash)
 }

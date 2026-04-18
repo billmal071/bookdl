@@ -251,9 +251,18 @@ func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int,
 	return books, nil
 }
 
-// GetDownloadInfo retrieves download links using a headless browser
+// GetDownloadInfo retrieves download links using a headless browser.
+// Z-Library requires login to show download links on book detail pages,
+// so we search by book ID to find the z-bookcard element which exposes
+// the download attribute without authentication.
 func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
-	// Get a browser context from the shared pool
+	// Try search-based extraction first (works without login)
+	info, err := c.getDownloadInfoViaSearch(ctx, md5Hash)
+	if err == nil && info != nil && info.DirectURL != "" {
+		return info, nil
+	}
+
+	// Fallback: try the book detail page (may work if user has session cookies)
 	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get browser context: %w", err)
@@ -276,6 +285,83 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 	}
 
 	return parseDownloadPageHTML(htmlContent, c.baseURL)
+}
+
+// getDownloadInfoViaSearch extracts the download URL for a specific book ID
+// by searching on Z-Library and finding the matching z-bookcard element.
+// Z-Library's search doesn't work with numeric IDs directly, so we navigate
+// to the search page and use JavaScript to find the z-bookcard with the
+// matching ID attribute.
+func (c *BrowserClient) getDownloadInfoViaSearch(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
+	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get browser context: %w", err)
+	}
+	defer cancel()
+
+	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
+	defer timeoutCancel()
+
+	// Navigate to the search page with the book ID as query
+	searchURL := fmt.Sprintf("https://%s/s/%s", c.baseURL, url.PathEscape(md5Hash))
+
+	err = chromedp.Run(browserCtx,
+		chromedp.Navigate(searchURL),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("browser navigation failed: %w", err)
+	}
+
+	// Wait for z-bookcard elements and find the one with matching ID
+	const maxPoll = 8
+	var downloadURL string
+	targetID := md5Hash
+
+	for i := 0; i < maxPoll; i++ {
+		err = chromedp.Run(browserCtx, chromedp.Evaluate(fmt.Sprintf(`
+			(function() {
+				var cards = document.querySelectorAll('z-bookcard');
+				// First try exact ID match
+				for (var i = 0; i < cards.length; i++) {
+					if (cards[i].getAttribute('id') === '%s') {
+						var dl = cards[i].getAttribute('download');
+						if (dl && dl.trim() !== '') return dl.trim();
+					}
+				}
+				// If no exact match, return first card with a download attribute
+				for (var i = 0; i < cards.length; i++) {
+					var dl = cards[i].getAttribute('download');
+					if (dl && dl.trim() !== '') return dl.trim();
+				}
+				return '';
+			})()
+		`, targetID), &downloadURL))
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract download URL: %w", err)
+		}
+		if downloadURL != "" {
+			break
+		}
+		if err := chromedp.Run(browserCtx, chromedp.Sleep(2*time.Second)); err != nil {
+			return nil, err
+		}
+	}
+
+	if downloadURL == "" {
+		return nil, fmt.Errorf("no download URL found in search results")
+	}
+
+	// Make absolute if relative
+	if !strings.HasPrefix(downloadURL, "http") {
+		downloadURL = fmt.Sprintf("https://%s%s", c.baseURL, downloadURL)
+	}
+
+	return &DownloadInfo{
+		DirectURL:  downloadURL,
+		MirrorURLs: []string{downloadURL},
+	}, nil
 }
 
 // ResolveDownloadURL navigates to a Z-Library download URL (e.g. /dl/...)
