@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type Download struct {
 	DownloadedSize int64
 	SourceURL      string
 	DownloadURL    string
+	Source         string
 	FilePath       string
 	TempPath       string
 	Status         DownloadStatus
@@ -57,10 +59,10 @@ func CreateDownload(d *Download) error {
 	result, err := database.Exec(`
 		INSERT INTO downloads (
 			md5_hash, title, authors, publisher, language, format,
-			file_size, source_url, download_url, file_path, temp_path, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			file_size, source_url, download_url, source, file_path, temp_path, status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.MD5Hash, d.Title, d.Authors, d.Publisher, d.Language, d.Format,
-		d.FileSize, d.SourceURL, d.DownloadURL, d.FilePath, d.TempPath, d.Status,
+		d.FileSize, d.SourceURL, d.DownloadURL, d.Source, d.FilePath, d.TempPath, d.Status,
 	)
 	if err != nil {
 		return err
@@ -78,13 +80,14 @@ func CreateDownload(d *Download) error {
 func GetDownload(id int64) (*Download, error) {
 	d := &Download{}
 	var errMsg sql.NullString
+	var source sql.NullString
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
-			file_size, downloaded_size, source_url, download_url, file_path,
+			file_size, downloaded_size, source_url, download_url, source, file_path,
 			temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 		FROM downloads WHERE id = ?`, id).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
-		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
+		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &source, &d.FilePath,
 		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
@@ -92,6 +95,9 @@ func GetDownload(id int64) (*Download, error) {
 	}
 	if errMsg.Valid {
 		d.ErrorMessage = errMsg.String
+	}
+	if source.Valid {
+		d.Source = source.String
 	}
 	return d, nil
 }
@@ -100,13 +106,14 @@ func GetDownload(id int64) (*Download, error) {
 func GetDownloadByHash(hash string) (*Download, error) {
 	d := &Download{}
 	var errMsg sql.NullString
+	var source sql.NullString
 	err := database.QueryRow(`
 		SELECT id, md5_hash, title, authors, publisher, language, format,
-			file_size, downloaded_size, source_url, download_url, file_path,
+			file_size, downloaded_size, source_url, download_url, source, file_path,
 			temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 		FROM downloads WHERE md5_hash = ?`, hash).Scan(
 		&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
-		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
+		&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &source, &d.FilePath,
 		&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 	)
 	if err != nil {
@@ -114,6 +121,9 @@ func GetDownloadByHash(hash string) (*Download, error) {
 	}
 	if errMsg.Valid {
 		d.ErrorMessage = errMsg.String
+	}
+	if source.Valid {
+		d.Source = source.String
 	}
 	return d, nil
 }
@@ -132,14 +142,14 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		}
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
-				file_size, downloaded_size, source_url, download_url, file_path,
+				file_size, downloaded_size, source_url, download_url, source, file_path,
 				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads WHERE status = ?
 			`+orderClause, status)
 	} else if showAll {
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
-				file_size, downloaded_size, source_url, download_url, file_path,
+				file_size, downloaded_size, source_url, download_url, source, file_path,
 				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads
 			ORDER BY updated_at DESC`)
@@ -147,7 +157,7 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		// By default, don't show completed downloads
 		rows, err = database.Query(`
 			SELECT id, md5_hash, title, authors, publisher, language, format,
-				file_size, downloaded_size, source_url, download_url, file_path,
+				file_size, downloaded_size, source_url, download_url, source, file_path,
 				temp_path, status, error_message, retry_count, verified, priority, created_at, updated_at, completed_at
 			FROM downloads WHERE status != 'completed'
 			ORDER BY updated_at DESC`)
@@ -161,9 +171,10 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 	for rows.Next() {
 		d := &Download{}
 		var errMsg sql.NullString
+		var source sql.NullString
 		err := rows.Scan(
 			&d.ID, &d.MD5Hash, &d.Title, &d.Authors, &d.Publisher, &d.Language, &d.Format,
-			&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &d.FilePath,
+			&d.FileSize, &d.DownloadedSize, &d.SourceURL, &d.DownloadURL, &source, &d.FilePath,
 			&d.TempPath, &d.Status, &errMsg, &d.RetryCount, &d.Verified, &d.Priority, &d.CreatedAt, &d.UpdatedAt, &d.CompletedAt,
 		)
 		if err != nil {
@@ -171,6 +182,9 @@ func ListDownloads(status DownloadStatus, showAll bool) ([]*Download, error) {
 		}
 		if errMsg.Valid {
 			d.ErrorMessage = errMsg.String
+		}
+		if source.Valid {
+			d.Source = source.String
 		}
 		downloads = append(downloads, d)
 	}
@@ -199,6 +213,23 @@ func UpdateDownloadURL(id int64, url string) error {
 		UPDATE downloads SET download_url = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`, url, id)
 	return err
+}
+
+// InferSource determines the download source from its SourceURL or Source field.
+func InferSource(d *Download) string {
+	if d.Source != "" {
+		return d.Source
+	}
+	switch {
+	case strings.Contains(d.SourceURL, "z-library"):
+		return "zlibrary"
+	case strings.Contains(d.SourceURL, "liber3"):
+		return "liber3"
+	case strings.Contains(d.SourceURL, "annas-archive"):
+		return "anna"
+	default:
+		return ""
+	}
 }
 
 // MarkCompleted marks a download as completed

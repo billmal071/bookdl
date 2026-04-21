@@ -71,17 +71,73 @@ func resumeOne(ctx context.Context, id int64) error {
 	dlCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	if err := mgr.StartDownload(dlCtx, download); err != nil {
-		db.UpdateStatus(download.ID, db.StatusFailed, err.Error())
+	err = mgr.StartDownload(dlCtx, download)
+	if err == nil {
+		if err := db.MarkCompleted(download.ID, download.FilePath); err != nil {
+			return fmt.Errorf("failed to mark complete: %w", err)
+		}
+		Successf("Downloaded: %s", download.FilePath)
+		return nil
+	}
+
+	// If the stored URL failed, try re-fetching fresh download links
+	errStr := err.Error()
+	isStaleURL := strings.Contains(errStr, "504") ||
+		strings.Contains(errStr, "410") ||
+		strings.Contains(errStr, "403") ||
+		strings.Contains(errStr, "404") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "context deadline exceeded")
+
+	if !isStaleURL {
+		db.UpdateStatus(download.ID, db.StatusFailed, errStr)
 		return fmt.Errorf("download failed: %w", err)
 	}
 
-	if err := db.MarkCompleted(download.ID, download.FilePath); err != nil {
-		return fmt.Errorf("failed to mark complete: %w", err)
+	source := db.InferSource(download)
+	if source == "" {
+		db.UpdateStatus(download.ID, db.StatusFailed, errStr)
+		return fmt.Errorf("download failed (unknown source, cannot refresh URL): %w", err)
 	}
 
-	Successf("Downloaded: %s", download.FilePath)
-	return nil
+	fmt.Printf("Stored URL failed, fetching fresh download links from %s...\n", source)
+
+	dlInfo, fetchErr := GetDownloadInfoForSource(dlCtx, download.MD5Hash, source)
+	if fetchErr != nil {
+		db.UpdateStatus(download.ID, db.StatusFailed, errStr)
+		return fmt.Errorf("download failed (could not refresh URL: %v): %w", fetchErr, err)
+	}
+
+	// Collect all fresh URLs to try
+	urlsToTry := []string{}
+	if dlInfo.DirectURL != "" {
+		urlsToTry = append(urlsToTry, dlInfo.DirectURL)
+	}
+	for _, mirror := range dlInfo.MirrorURLs {
+		if mirror != dlInfo.DirectURL {
+			urlsToTry = append(urlsToTry, mirror)
+		}
+	}
+
+	for i, tryURL := range urlsToTry {
+		if i > 0 {
+			fmt.Printf("Trying mirror %d...\n", i+1)
+		}
+		download.DownloadURL = tryURL
+		db.UpdateDownloadURL(download.ID, tryURL)
+
+		if tryErr := mgr.StartDownload(dlCtx, download); tryErr == nil {
+			if err := db.MarkCompleted(download.ID, download.FilePath); err != nil {
+				return fmt.Errorf("failed to mark complete: %w", err)
+			}
+			Successf("Downloaded: %s", download.FilePath)
+			return nil
+		}
+	}
+
+	db.UpdateStatus(download.ID, db.StatusFailed, "all mirrors failed after URL refresh")
+	return fmt.Errorf("download failed after trying all fresh mirrors")
 }
 
 func resumeAll(ctx context.Context) error {

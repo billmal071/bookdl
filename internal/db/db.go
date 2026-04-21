@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS downloads (
     downloaded_size INTEGER DEFAULT 0,
     source_url      TEXT NOT NULL,
     download_url    TEXT,
+    source          TEXT DEFAULT '',
     file_path       TEXT,
     temp_path       TEXT,
     status          TEXT DEFAULT 'pending',
@@ -184,6 +185,32 @@ func runMigrations(db *sql.DB) error {
 		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_downloads_priority ON downloads(priority DESC)")
 		if err != nil {
 			return err
+		}
+	}
+
+	// Migration 3: Add source column if it doesn't exist
+	var sourceCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('downloads') WHERE name='source'").Scan(&sourceCount)
+	if err != nil {
+		return err
+	}
+
+	if sourceCount == 0 {
+		if _, err := db.Exec("ALTER TABLE downloads ADD COLUMN source TEXT DEFAULT ''"); err != nil {
+			return err
+		}
+		// Backfill source from source_url for existing records
+		for _, pair := range [][2]string{
+			{"z-library", "zlibrary"},
+			{"liber3", "liber3"},
+			{"annas-archive", "anna"},
+		} {
+			if _, err := db.Exec(
+				"UPDATE downloads SET source = ? WHERE source = '' AND source_url LIKE ?",
+				pair[1], "%"+pair[0]+"%",
+			); err != nil {
+				return err
+			}
 		}
 	}
 

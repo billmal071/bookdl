@@ -251,9 +251,24 @@ func (c *BrowserClient) SearchPage(ctx context.Context, query string, limit int,
 	return books, nil
 }
 
-// GetDownloadInfo retrieves download links using a headless browser
+// GetDownloadInfo retrieves download links using a headless browser.
+// Z-Library requires login to show download links on book detail pages,
+// so we search by book ID to find the z-bookcard element which exposes
+// the download attribute without authentication.
 func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
-	// Get a browser context from the shared pool
+	cfg := config.Get()
+
+	// Try search-based extraction first (works without login)
+	info, err := c.getDownloadInfoViaSearch(ctx, md5Hash)
+	if err == nil && info != nil && info.DirectURL != "" {
+		return info, nil
+	}
+	if cfg.Browser.VerboseLogging {
+		fmt.Printf("[Z-Library] Search-based extraction failed: %v, trying book page...\n", err)
+	}
+
+	// Fallback: navigate to book page, extract title, then search by title
+	// to get the download URL from z-bookcard (since book pages require login)
 	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get browser context: %w", err)
@@ -265,17 +280,153 @@ func (c *BrowserClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 
 	pageURL := fmt.Sprintf("https://%s/book/%s", c.baseURL, md5Hash)
 
-	var htmlContent string
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate(pageURL),
 		chromedp.Sleep(5*time.Second),
-		chromedp.OuterHTML("html", &htmlContent),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("browser page load failed: %w", err)
 	}
 
-	return parseDownloadPageHTML(htmlContent, c.baseURL)
+	// Wait for the PoW challenge to complete (page reloads after solving)
+	var title string
+	for i := 0; i < 10; i++ {
+		_ = chromedp.Run(browserCtx, chromedp.Evaluate(`document.title`, &title))
+		if cfg.Browser.VerboseLogging {
+			fmt.Printf("[Z-Library] Book page title (poll %d): %q\n", i+1, title)
+		}
+		if title != "" && title != "Checking your browser ..." {
+			break
+		}
+		_ = chromedp.Run(browserCtx, chromedp.Sleep(3*time.Second))
+	}
+
+	// Try extracting z-bookcard download attribute via JS
+	var downloadURL string
+	for i := 0; i < 5; i++ {
+		_ = chromedp.Run(browserCtx, chromedp.Evaluate(`
+			(function() {
+				var card = document.querySelector('z-bookcard');
+				if (card) {
+					var dl = card.getAttribute('download');
+					if (dl && dl.trim() !== '') return dl.trim();
+				}
+				var links = document.querySelectorAll('a[href*="/dl/"]');
+				for (var i = 0; i < links.length; i++) {
+					var href = links[i].getAttribute('href');
+					if (href && href.includes('/dl/')) return href;
+				}
+				return '';
+			})()
+		`, &downloadURL))
+		if downloadURL != "" {
+			break
+		}
+		_ = chromedp.Run(browserCtx, chromedp.Sleep(2*time.Second))
+	}
+
+	if downloadURL != "" {
+		if !strings.HasPrefix(downloadURL, "http") {
+			downloadURL = fmt.Sprintf("https://%s%s", c.baseURL, downloadURL)
+		}
+		return &DownloadInfo{
+			DirectURL:  downloadURL,
+			MirrorURLs: []string{downloadURL},
+		}, nil
+	}
+
+	// If book page didn't have download link (likely needs login),
+	// try to extract the book title and search for it
+	if title != "" && title != "Checking your browser ..." {
+		// Extract just the book title (Z-Library titles are usually "Book Title | Z-Library")
+		bookTitle := strings.Split(title, "|")[0]
+		bookTitle = strings.TrimSpace(bookTitle)
+		if bookTitle != "" {
+			info, searchErr := c.getDownloadInfoViaSearch(ctx, bookTitle)
+			if searchErr == nil && info != nil && info.DirectURL != "" {
+				return info, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no download links found")
+}
+
+// getDownloadInfoViaSearch extracts the download URL for a specific book ID
+// by searching on Z-Library and finding the matching z-bookcard element.
+// Z-Library's search doesn't work with numeric IDs directly, so we navigate
+// to the search page and use JavaScript to find the z-bookcard with the
+// matching ID attribute.
+func (c *BrowserClient) getDownloadInfoViaSearch(ctx context.Context, md5Hash string) (*DownloadInfo, error) {
+	browserCtx, cancel, err := sharedBrowserPool.getBrowserContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get browser context: %w", err)
+	}
+	defer cancel()
+
+	browserCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
+	defer timeoutCancel()
+
+	// Navigate to the search page with the book ID as query
+	searchURL := fmt.Sprintf("https://%s/s/%s", c.baseURL, url.PathEscape(md5Hash))
+
+	err = chromedp.Run(browserCtx,
+		chromedp.Navigate(searchURL),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("browser navigation failed: %w", err)
+	}
+
+	// Wait for z-bookcard elements and find the one with matching ID
+	const maxPoll = 8
+	var downloadURL string
+	targetID := md5Hash
+
+	for i := 0; i < maxPoll; i++ {
+		err = chromedp.Run(browserCtx, chromedp.Evaluate(fmt.Sprintf(`
+			(function() {
+				var cards = document.querySelectorAll('z-bookcard');
+				// First try exact ID match
+				for (var i = 0; i < cards.length; i++) {
+					if (cards[i].getAttribute('id') === '%s') {
+						var dl = cards[i].getAttribute('download');
+						if (dl && dl.trim() !== '') return dl.trim();
+					}
+				}
+				// If no exact match, return first card with a download attribute
+				for (var i = 0; i < cards.length; i++) {
+					var dl = cards[i].getAttribute('download');
+					if (dl && dl.trim() !== '') return dl.trim();
+				}
+				return '';
+			})()
+		`, targetID), &downloadURL))
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract download URL: %w", err)
+		}
+		if downloadURL != "" {
+			break
+		}
+		if err := chromedp.Run(browserCtx, chromedp.Sleep(2*time.Second)); err != nil {
+			return nil, err
+		}
+	}
+
+	if downloadURL == "" {
+		return nil, fmt.Errorf("no download URL found in search results")
+	}
+
+	// Make absolute if relative
+	if !strings.HasPrefix(downloadURL, "http") {
+		downloadURL = fmt.Sprintf("https://%s%s", c.baseURL, downloadURL)
+	}
+
+	return &DownloadInfo{
+		DirectURL:  downloadURL,
+		MirrorURLs: []string{downloadURL},
+	}, nil
 }
 
 // ResolveDownloadURL navigates to a Z-Library download URL (e.g. /dl/...)

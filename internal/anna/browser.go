@@ -219,6 +219,19 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 		return "", fmt.Errorf("browser navigation failed: %w", err)
 	}
 
+	// Check for DDoS-Guard / hCaptcha before wasting time polling
+	var initialHTML string
+	if err := chromedp.Run(browserCtx, chromedp.OuterHTML("html", &initialHTML)); err == nil {
+		lowerHTML := strings.ToLower(initialHTML)
+		if strings.Contains(lowerHTML, "ddos-guard") || strings.Contains(lowerHTML, "h-captcha") ||
+			strings.Contains(lowerHTML, "hcaptcha") {
+			if cfg.Browser.VerboseLogging {
+				fmt.Println("[Browser] DDoS-Guard/hCaptcha detected, skipping this mirror")
+			}
+			return "", fmt.Errorf("page blocked by captcha (DDoS-Guard/hCaptcha)")
+		}
+	}
+
 	if cfg.Browser.VerboseLogging {
 		fmt.Println("[Browser] Page loaded, waiting for download link...")
 	}
@@ -303,6 +316,17 @@ func (c *BrowserClient) ResolveDownloadURL(ctx context.Context, slowDownloadURL 
 			elapsed.Round(time.Second), maxWait)
 	}
 
+	// If the resolved URL is an intermediate libgen page (ads.php), follow the chain via HTTP
+	if strings.Contains(downloadURL, "ads.php") || strings.Contains(downloadURL, "file.php") {
+		if cfg.Browser.VerboseLogging {
+			fmt.Printf("[Browser] Resolved to intermediate page, following chain: %s\n", downloadURL)
+		}
+		resolved, err := resolveLibgenChain(ctx, downloadURL)
+		if err == nil && resolved != "" {
+			downloadURL = resolved
+		}
+	}
+
 	return downloadURL, nil
 }
 
@@ -345,6 +369,11 @@ func extractDownloadURL(html string, baseURL string) string {
 
 		hrefLower := strings.ToLower(href)
 
+		// Skip .onion URLs (require Tor)
+		if strings.Contains(hrefLower, ".onion") {
+			return
+		}
+
 		// Skip internal Anna's Archive navigation links
 		if strings.Contains(hrefLower, "/slow_download/") ||
 			strings.Contains(hrefLower, "/fast_download/") ||
@@ -369,10 +398,18 @@ func extractDownloadURL(html string, baseURL string) string {
 			}
 		}
 
-		// Priority 3: Trusted download sources (file.php, get endpoints)
+		// Priority 3: LibGen get.php direct download links (highest priority among trusted sources)
+		if strings.Contains(hrefLower, "get.php") && strings.Contains(hrefLower, "md5=") {
+			downloadURL = href
+			return
+		}
+
+		// Priority 4: Trusted download sources (file.php, ads.php, get endpoints)
 		for _, source := range trustedSources {
 			if strings.Contains(hrefLower, source) {
 				if strings.Contains(hrefLower, "/file.php") ||
+					strings.Contains(hrefLower, "/ads.php") ||
+					strings.Contains(hrefLower, "/get.php") ||
 					strings.Contains(hrefLower, "/get/") ||
 					strings.Contains(hrefLower, "/main/") ||
 					strings.Contains(hrefLower, "/download/") {
@@ -380,6 +417,13 @@ func extractDownloadURL(html string, baseURL string) string {
 						fallbackURL = href
 					}
 				}
+			}
+		}
+
+		// Priority 5: Relative ads.php/get.php links (on libgen.li pages)
+		if strings.Contains(hrefLower, "ads.php") || strings.Contains(hrefLower, "get.php") {
+			if fallbackURL == "" {
+				fallbackURL = href
 			}
 		}
 	})
@@ -398,10 +442,11 @@ func extractDownloadURL(html string, baseURL string) string {
 
 			hrefLower := strings.ToLower(href)
 
-			// Skip internal links
+			// Skip internal links and .onion URLs
 			if strings.Contains(hrefLower, "/slow_download/") ||
 				strings.Contains(hrefLower, "/fast_download/") ||
-				strings.Contains(hrefLower, "/account/") {
+				strings.Contains(hrefLower, "/account/") ||
+				strings.Contains(hrefLower, ".onion") {
 				return
 			}
 
