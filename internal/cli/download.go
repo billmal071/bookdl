@@ -170,10 +170,13 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 		fmt.Printf("Fetching book information...\n")
 		switch source {
 		case "zlibrary":
-			// Z-Library requires login to access book pages and doesn't support
-			// search by numeric ID. The download URL is only available from
-			// the z-bookcard element's download attribute during interactive search.
-			// Direct download by ID is not supported.
+			// Z-Library requires login for book pages and can't search by numeric ID.
+			// If we have a stored download URL from a previous attempt, use it.
+			if existing != nil && existing.DownloadURL != "" {
+				fmt.Printf("Using stored download URL from previous attempt.\n")
+			} else {
+				return fmt.Errorf("Z-Library downloads require the search flow.\nUse: bookdl search \"<book title>\" --source zlibrary\nThen select the book to download it")
+			}
 		default:
 			client := anna.NewClient()
 			books, err := client.Search(ctx, md5Hash, 1)
@@ -188,6 +191,11 @@ func runDownloadByHash(ctx context.Context, md5Hash string, outputDir string, bo
 	if bookInfo != nil && bookInfo.DownloadURL != "" {
 		dlInfo = &anna.DownloadInfo{
 			DirectURL: bookInfo.DownloadURL,
+		}
+	} else if source == "zlibrary" && existing != nil && existing.DownloadURL != "" {
+		// Use stored download URL from previous Z-Library download
+		dlInfo = &anna.DownloadInfo{
+			DirectURL: existing.DownloadURL,
 		}
 	} else {
 		fmt.Printf("Getting download links from %s...\n", source)
