@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -144,15 +146,28 @@ func (c *ScraperClient) GetDownloadInfo(ctx context.Context, md5Hash string) (*D
 	collector.OnHTML("body", func(e *colly.HTMLElement) {
 		info = &DownloadInfo{}
 
-		// First priority: LibGen/library.lol links (direct HTTP downloads, no captcha)
+		// First priority: LibGen/library.lol links — resolve file.php chain to direct get.php URL
 		e.ForEach("a[href*='libgen.li/file.php'], a[href*='library.lol'], a[href*='libgen.is'], a[href*='libgen.rs'], a[href*='libgen.st']", func(_ int, el *colly.HTMLElement) {
 			href := el.Attr("href")
-			if href != "" {
-				if info.DirectURL == "" {
-					info.DirectURL = href
-				}
-				info.MirrorURLs = append(info.MirrorURLs, href)
+			if href == "" {
+				return
 			}
+			// For libgen.li/file.php, resolve the full chain to get a direct download URL
+			if strings.Contains(href, "libgen.li/file.php") {
+				resolved, err := resolveLibgenChain(ctx, href)
+				if err == nil && resolved != "" {
+					if info.DirectURL == "" {
+						info.DirectURL = resolved
+					}
+					info.MirrorURLs = append(info.MirrorURLs, resolved)
+					return
+				}
+				// Fall through to add the raw URL if chain resolution fails
+			}
+			if info.DirectURL == "" {
+				info.DirectURL = href
+			}
+			info.MirrorURLs = append(info.MirrorURLs, href)
 		})
 
 		// Second priority: slow download links (may be behind captcha)
@@ -266,4 +281,94 @@ func parseBookElement(e *colly.HTMLElement, baseURL string) *Book {
 	}
 
 	return book
+}
+
+// resolveLibgenChain follows the libgen.li HTTP chain:
+// file.php → ads.php → get.php, returning the final direct download URL.
+// This avoids needing a browser since all pages are plain HTML.
+func resolveLibgenChain(ctx context.Context, filePhpURL string) (string, error) {
+	client := &http.Client{
+		Timeout: 20 * time.Second,
+		// Don't follow redirects automatically so we can inspect each step
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// Parse the base URL from the file.php URL
+	parsed, err := url.Parse(filePhpURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %w", err)
+	}
+	baseURL := fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
+
+	// Step 1: Fetch file.php page and extract ads.php link
+	adsURL, err := fetchAndExtractLink(ctx, client, filePhpURL, baseURL, "ads.php")
+	if err != nil {
+		return "", fmt.Errorf("failed to find ads.php link: %w", err)
+	}
+
+	// Step 2: Fetch ads.php page and extract get.php link
+	getURL, err := fetchAndExtractLink(ctx, client, adsURL, baseURL, "get.php")
+	if err != nil {
+		return "", fmt.Errorf("failed to find get.php link: %w", err)
+	}
+
+	return getURL, nil
+}
+
+// fetchAndExtractLink fetches a page and finds a link containing the target pattern
+func fetchAndExtractLink(ctx context.Context, client *http.Client, pageURL, baseURL, linkPattern string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", pageURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return "", err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return "", err
+	}
+
+	var foundURL string
+	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
+		if foundURL != "" {
+			return
+		}
+		href, exists := s.Attr("href")
+		if !exists || href == "" {
+			return
+		}
+		if strings.Contains(href, linkPattern) {
+			if !strings.HasPrefix(href, "http") {
+				if strings.HasPrefix(href, "/") {
+					href = baseURL + href
+				} else {
+					href = baseURL + "/" + href
+				}
+			}
+			foundURL = href
+		}
+	})
+
+	if foundURL == "" {
+		return "", fmt.Errorf("%s link not found on page", linkPattern)
+	}
+
+	return foundURL, nil
 }
