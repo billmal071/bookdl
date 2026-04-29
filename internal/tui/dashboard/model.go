@@ -71,6 +71,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+		// Tab switching always works, even during text input
+		switch msg.String() {
+		case "tab":
+			m.activeTab = m.activeTab.next()
+			m.focus = defaultFocusForTab(m.activeTab)
+			return m, nil
+		case "shift+tab":
+			m.activeTab = m.activeTab.prev()
+			m.focus = defaultFocusForTab(m.activeTab)
+			return m, nil
+		}
+
 		// Check if current panel is in text input mode
 		if m.isInputFocused() {
 			return m.updateActivePanel(msg)
@@ -81,14 +93,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			m.quitting = true
 			return m, tea.Quit
-		case "tab":
-			m.activeTab = m.activeTab.next()
-			m.focus = defaultFocusForTab(m.activeTab)
-			return m, nil
-		case "shift+tab":
-			m.activeTab = m.activeTab.prev()
-			m.focus = defaultFocusForTab(m.activeTab)
-			return m, nil
 		}
 
 		// Delegate to active panel
@@ -227,6 +231,7 @@ func (m Model) renderStatusBar() string {
 			)
 		case tabDownloads:
 			hints = append(hints,
+				m.styles.HelpKey.Render("←→")+" "+m.styles.HelpDesc.Render("panels"),
 				m.styles.HelpKey.Render("p")+" "+m.styles.HelpDesc.Render("pause"),
 				m.styles.HelpKey.Render("r")+" "+m.styles.HelpDesc.Render("resume"),
 				m.styles.HelpKey.Render("x")+" "+m.styles.HelpDesc.Render("cancel"),
