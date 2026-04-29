@@ -7,6 +7,7 @@ import (
 	"github.com/billmal071/bookdl/internal/anna"
 	"github.com/billmal071/bookdl/internal/config"
 	"github.com/billmal071/bookdl/internal/db"
+	"github.com/billmal071/bookdl/internal/tui/dashboard"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,9 @@ Examples:
   bookdl list                             List all downloads
   bookdl resume 1                         Resume download #1
   bookdl pause 1                          Pause download #1`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return dashboard.Run()
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize config
 		if err := config.Init(cfgFile); err != nil {
@@ -48,6 +52,14 @@ Examples:
 	},
 }
 
+var tuiCmd = &cobra.Command{
+	Use:   "tui",
+	Short: "Launch interactive TUI dashboard",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return dashboard.Run()
+	},
+}
+
 // Execute runs the root command
 func Execute() error {
 	return rootCmd.Execute()
@@ -58,6 +70,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Add subcommands
+	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(listCmd)
