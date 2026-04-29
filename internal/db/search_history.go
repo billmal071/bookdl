@@ -115,6 +115,12 @@ func ClearSearchHistory() error {
 	return err
 }
 
+// DeleteSearchHistory deletes a single search history entry by ID.
+func DeleteSearchHistory(id int64) error {
+	_, err := database.Exec("DELETE FROM search_history WHERE id = ?", id)
+	return err
+}
+
 // DeleteSearchHistoryOlderThan removes history older than the given duration
 func DeleteSearchHistoryOlderThan(d time.Duration) error {
 	cutoff := time.Now().Add(-d)
