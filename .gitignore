@@ -19,7 +19,6 @@ vendor/
 
 # IDE
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
@@ -35,3 +34,4 @@ config.yaml
 # Debug
 debug/
 *.log
+.gitignore

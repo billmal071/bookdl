@@ -90,8 +90,11 @@ func (m downloadsModel) Update(msg tea.Msg) (downloadsModel, tea.Cmd) {
 			if m.cursor < len(m.items)-1 {
 				m.cursor++
 			}
-		case "tab":
-			m.focusDetail = !m.focusDetail
+		case "l", "right":
+			m.focusDetail = true
+			return m, nil
+		case "h", "left":
+			m.focusDetail = false
 			return m, nil
 		case "p":
 			if m.cursor < len(m.items) {
